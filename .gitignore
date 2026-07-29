@@ -1,0 +1,11 @@
+# Work artifacts
+*.log
+scratch/
+tmp/
+
+# Generated comparison outputs
+out/
+*.gen.*
+
+# macOS
+.DS_Store
