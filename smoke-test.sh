@@ -88,11 +88,19 @@ else skip "butteraugli"; fi
 
 echo
 echo "== Presence of the rest of the toolbox =="
-for t in gif2webp jpegtran cjpeg djpeg vips vipsthumbnail ffmpeg ffprobe exiftool \
-         identify pngquant optipng zopflipng advpng pngcrush gifsicle jpegoptim \
-         guetzli ect heif-convert oiiotool jxlinfo oxipng; do
+for t in gif2webp jpegtran cjpeg djpeg mozjpeg-cjpeg vips vipsthumbnail ffmpeg ffprobe \
+         exiftool identify pngquant optipng zopflipng advpng pngcrush gifsicle jpegoptim \
+         guetzli ect heif-enc heif-convert oiiotool jxlinfo oxipng; do
   command -v "$t" >/dev/null 2>&1 && ok "$t" || bad "$t (missing)"
 done
+
+echo
+echo "== Comparison harness (Node.js CLI) =="
+if command -v compare-codecs >/dev/null 2>&1; then
+  if compare-codecs "$orig" --codecs jxl,webp --target 80 --max-iterations 4 >/dev/null 2>&1; then
+    ok "compare-codecs (jxl,webp end-to-end)"
+  else bad "compare-codecs (run)"; fi
+else bad "compare-codecs (missing)"; fi
 
 rm -rf "$work"
 echo
