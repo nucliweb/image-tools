@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { mkdtempSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
 import { findQualityForTarget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng } from "../src/image.js";
-import { toMarkdownTable, toCsv } from "../src/report.js";
+import { collectImages, aggregate } from "../src/batch.js";
+import { toMarkdownTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
 
-const USAGE = `Usage: compare-codecs <reference.png> [options]
+const USAGE = `Usage: compare-codecs <image-or-dir...> [options]
 
-Encodes the reference with each codec, searching its quality knob until the
-decoded image reaches an equal perceptual target (ssimulacra2), then reports
-size vs quality so codecs are compared apples-to-apples.
+Encodes each reference (PNG files and/or directories of PNGs) with every codec,
+searching its quality knob until the decoded image reaches an equal perceptual
+target (ssimulacra2), then reports size vs quality so codecs are compared
+apples-to-apples. With more than one image it also prints a batch summary
+(average bpp, wins, and savings vs mozjpeg).
 
 Options:
   -t, --target <n>          Target ssimulacra2 score (default: 90)
@@ -49,7 +52,6 @@ function main() {
     process.exit(values.help ? 0 : 1);
   }
 
-  const reference = positionals[0];
   const target = Number(values.target);
   const tolerance = Number(values.tolerance);
   const maxIterations = Number(values["max-iterations"]);
@@ -60,40 +62,66 @@ function main() {
     console.error(`Unknown codec(s): ${unknown.join(", ")}. Known: ${Object.keys(CODECS).join(", ")}`);
     process.exit(1);
   }
+
+  let images;
   try {
-    statSync(reference);
-  } catch {
-    console.error(`Reference not found: ${reference}`);
+    images = collectImages(positionals);
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  if (images.length === 0) {
+    console.error("No PNG images found in the given paths.");
     process.exit(1);
   }
 
   const workdir = mkdtempSync(join(tmpdir(), "image-tools-"));
   try {
-    const refNorm = join(workdir, "reference.norm.png");
-    try {
-      writeStrippedPng(reference, refNorm);
-    } catch {
-      console.error(`Reference must be a PNG in sRGB: ${reference}`);
-      process.exit(1);
-    }
-    const { width, height } = pngDimensions(refNorm);
+    const perImage = [];
+    images.forEach((image, idx) => {
+      const refNorm = join(workdir, `img${idx}.norm.png`);
+      let dims;
+      try {
+        writeStrippedPng(image, refNorm);
+        dims = pngDimensions(refNorm);
+      } catch {
+        process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
+        return;
+      }
 
-    const results = [];
-    for (const id of ids) {
-      process.stderr.write(`→ ${CODECS[id].name} …\n`);
-      results.push(
-        findQualityForTarget(CODECS[id], reference, target, workdir, {
+      process.stderr.write(`# ${basename(image)}\n`);
+      const results = ids.map((id) => {
+        process.stderr.write(`  → ${CODECS[id].name} …\n`);
+        return findQualityForTarget(CODECS[id], image, target, workdir, {
           tolerance,
           maxIterations,
           referenceNorm: refNorm,
-        }),
-      );
+        });
+      });
+
+      perImage.push({ image: basename(image), width: dims.width, height: dims.height, results });
+    });
+
+    if (perImage.length === 0) {
+      console.error("No usable PNG images.");
+      process.exit(1);
     }
 
-    console.log(toMarkdownTable(results, { reference: basename(reference), width, height, target }));
+    const blocks = perImage.map((p) =>
+      toMarkdownTable(p.results, { reference: p.image, width: p.width, height: p.height, target }),
+    );
+    console.log(blocks.join("\n\n"));
+
+    if (perImage.length > 1) {
+      const baselineId = ids.includes("mozjpeg") ? "mozjpeg" : ids[0];
+      const rows = aggregate(perImage, { baselineId });
+      const baselineName = CODECS[baselineId]?.name ?? baselineId;
+      console.log(`\n${toAggregateTable(rows, { imageCount: perImage.length, target, baselineName })}`);
+    }
 
     if (values.csv) {
-      writeFileSync(values.csv, `${toCsv(results)}\n`);
+      const csv = perImage.length > 1 ? toBatchCsv(perImage) : toCsv(perImage[0].results);
+      writeFileSync(values.csv, `${csv}\n`);
       process.stderr.write(`Wrote ${values.csv}\n`);
     }
   } finally {

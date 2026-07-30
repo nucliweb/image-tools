@@ -18,9 +18,18 @@ Docker image, where the CLI is installed as `compare-codecs`.
 # Inside the Docker image:
 compare-codecs reference.png --target 90
 
+# A whole folder (and/or several images) at once, with a batch summary:
+compare-codecs images/ --target 90 --csv results.csv
+
 # From a checkout (Node on PATH, tools on PATH):
 node compare/bin/compare.js reference.png --target 90 --csv results.csv
 ```
+
+Each argument may be a PNG file or a directory of PNGs. With more than one image,
+a per-image table is printed for each, followed by a **batch summary**: average
+bpp, how many images each codec wins (smallest file), and mean size savings versus
+mozjpeg. A codec that cannot land within tolerance of the target for an image (its
+range is exhausted) is marked with `*`.
 
 Options:
 
