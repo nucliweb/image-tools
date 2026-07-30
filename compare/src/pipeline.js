@@ -52,6 +52,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
 
   // Re-encode at the chosen knob to read the definitive size and decoded output.
   const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir);
+  const tolerance = opts.tolerance ?? 0.5;
 
   return {
     id: codec.id,
@@ -63,5 +64,6 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     bytes: final.bytes,
     bpp: (final.bytes * 8) / pixels,
     iterations: search.iterations,
+    reached: Math.abs(final.score - target) <= tolerance,
   };
 }
