@@ -1,0 +1,13 @@
+{
+  "name": "@image-tools/compare",
+  "version": "0.1.0",
+  "description": "Codec comparison tool: encode each codec to an equal perceptual target and report size vs quality.",
+  "type": "module",
+  "bin": {
+    "compare-codecs": "./bin/compare.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
