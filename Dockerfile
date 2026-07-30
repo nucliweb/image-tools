@@ -77,6 +77,17 @@ RUN git clone --depth 1 --branch ${BUTTERAUGLI_REF} \
          -o /out/bin/butteraugli -lpng -ljpeg \
     || echo "butteraugli build failed (optional) — continuing"
 
+# --- mozjpeg: trellis-optimized JPEG encoder (cjpeg, not in apt) --------------
+# Installed as `mozjpeg-cjpeg` so it does not collide with libjpeg-turbo's cjpeg.
+ARG MOZJPEG_REF=v4.1.5
+RUN git clone --depth 1 --branch ${MOZJPEG_REF} https://github.com/mozilla/mozjpeg.git \
+    && cmake -S mozjpeg -B mozjpeg/build \
+         -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_SIMD=0 \
+    && cmake --build mozjpeg/build \
+    && install -Dm755 \
+         "$(find mozjpeg/build -maxdepth 1 -type f -perm -u+x -name 'cjpeg*' | head -1)" \
+         /out/bin/mozjpeg-cjpeg
+
 # --- rust tools: dssim + oxipng ----------------------------------------------
 # Debian's rustc (1.63) is too old for current dssim/oxipng (need rustc >=1.71 and
 # the 2024 edition), so install a modern stable toolchain via rustup.
@@ -95,12 +106,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       webp libavif-bin libjpeg-turbo-progs libheif-examples \
       imagemagick libvips-tools ffmpeg libimage-exiftool-perl \
       pngquant optipng zopfli advancecomp pngcrush gifsicle jpegoptim guetzli \
-      openimageio-tools \
+      openimageio-tools nodejs \
       libbrotli1 libhwy1 libpng16-16 libjpeg62-turbo libgif7 liblcms2-2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Source-built + rust tools from the builder stage.
 COPY --from=builder /out/bin/ /usr/local/bin/
+
+# Comparison tool (Node.js CLI, zero npm dependencies).
+COPY compare/ /opt/image-tools/compare/
+RUN ln -s /opt/image-tools/compare/bin/compare.js /usr/local/bin/compare-codecs
 
 WORKDIR /work
 ENTRYPOINT ["/bin/bash"]
