@@ -40,7 +40,26 @@ Options:
 | `--tolerance <n>` | `0.5` | Stop searching once within this of the target |
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--csv <path>` | — | Also write the results as CSV |
+| `--html <path>` | — | Write an interactive, self-contained HTML report |
 | `--keep` | off | Keep the temporary work directory |
+
+## Interactive HTML report
+
+`--html report.html` produces a single self-contained file (images embedded, no
+external assets) that sweeps each codec across a range of quality points and lets
+you explore the trade-off interactively:
+
+- a **before/after wipe** between the original and each codec at the target quality,
+- a **format toggle** with live size / bpp / ssimulacra2 / dssim,
+- a **rate–distortion chart** (bpp vs ssimulacra2) with one curve per codec,
+- a **quality slider** that reads each codec's size at any quality level.
+
+```bash
+compare-codecs demos/images --target 90 --html report.html
+```
+
+See `demos/` for a ready-to-run example (run `demos/fetch.sh` first to get the
+sample images).
 
 ## Output
 
