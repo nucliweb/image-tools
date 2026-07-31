@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
 import { findQualityForTarget } from "../src/pipeline.js";
-import { pngDimensions, writeStrippedPng } from "../src/image.js";
+import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
 import { collectImages, aggregate } from "../src/batch.js";
+import { sweepCodec, nearestPoint } from "../src/sweep.js";
+import { buildHtml } from "../src/report-html.js";
 import { toMarkdownTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
 
 const USAGE = `Usage: compare-codecs <image-or-dir...> [options]
@@ -23,6 +25,7 @@ Options:
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
       --csv <path>          Also write the results as CSV
+      --html <path>         Write an interactive self-contained HTML report
       --keep                Keep the temporary work directory
   -h, --help                Show this help
 
@@ -37,6 +40,7 @@ function parse() {
       tolerance: { type: "string", default: "0.5" },
       "max-iterations": { type: "string", default: "10" },
       csv: { type: "string" },
+      html: { type: "string" },
       keep: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
@@ -77,6 +81,49 @@ function main() {
 
   const workdir = mkdtempSync(join(tmpdir(), "image-tools-"));
   try {
+    if (values.html) {
+      const report = { target, images: [] };
+      images.forEach((image, idx) => {
+        const refNorm = join(workdir, `img${idx}.norm.png`);
+        let dims;
+        try {
+          writeStrippedPng(image, refNorm);
+          dims = pngDimensions(refNorm);
+        } catch {
+          process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
+          return;
+        }
+        process.stderr.write(`# ${basename(image)}\n`);
+        const codecs = ids.map((id) => {
+          const codec = CODECS[id];
+          process.stderr.write(`  ~ ${codec.name} sweep …\n`);
+          const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir);
+          const prev = nearestPoint(points, target);
+          return {
+            id,
+            name: codec.name,
+            points,
+            preview: { ...prev, dataUri: pngDataUri(prev.decodedPng) },
+          };
+        });
+        report.images.push({
+          name: basename(image),
+          width: dims.width,
+          height: dims.height,
+          originalDataUri: pngDataUri(refNorm),
+          codecs,
+        });
+      });
+
+      if (report.images.length === 0) {
+        console.error("No usable PNG images.");
+        process.exit(1);
+      }
+      writeFileSync(values.html, buildHtml(report));
+      process.stderr.write(`Wrote ${values.html}\n`);
+      return;
+    }
+
     const perImage = [];
     images.forEach((image, idx) => {
       const refNorm = join(workdir, `img${idx}.norm.png`);

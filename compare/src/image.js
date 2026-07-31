@@ -63,3 +63,8 @@ export function stripPngChunks(pngPathOrBuffer) {
 export function writeStrippedPng(srcPath, dstPath) {
   writeFileSync(dstPath, stripPngChunks(srcPath));
 }
+
+/** Read a PNG file and return it as a base64 data URI. */
+export function pngDataUri(path) {
+  return `data:image/png;base64,${readFileSync(path).toString("base64")}`;
+}

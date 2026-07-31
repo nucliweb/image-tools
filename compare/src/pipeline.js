@@ -11,10 +11,10 @@ import { pngDimensions, writeStrippedPng } from "./image.js";
  * measure it. The reference is expected to be already normalized.
  * @returns {{ score: number, bytes: number, decodedPng: string }}
  */
-export function encodeDecodeMeasure(codec, referencePng, knob, workdir) {
-  const encoded = join(workdir, `${codec.id}.${codec.ext}`);
-  const decodedRaw = join(workdir, `${codec.id}.dec.raw.png`);
-  const decodedPng = join(workdir, `${codec.id}.dec.png`);
+export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "") {
+  const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
+  const decodedRaw = join(workdir, `${codec.id}${tag}.dec.raw.png`);
+  const decodedPng = join(workdir, `${codec.id}${tag}.dec.png`);
 
   run(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
   run(resolveCommand(codec.decoder), codec.decodeArgs(encoded, decodedRaw));
