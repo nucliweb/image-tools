@@ -78,6 +78,16 @@ svg { width:100%; height:auto; display:block; }
 .readout .win td { color:#22d3ee; font-weight:600; }
 .swatch { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; }
 .qline { display:flex; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--muted); }
+.note { font-size:12.5px; color:var(--muted); line-height:1.5; margin:10px 2px 0; }
+.note b { color:var(--ink); font-weight:600; }
+.learn { margin-top:22px; }
+.learn dl { display:grid; grid-template-columns:max-content 1fr; gap:8px 16px; margin:0; }
+.learn dt { color:var(--ink); font-weight:600; }
+.learn dd { margin:0; color:var(--muted); }
+.learn a { color:var(--accent); text-decoration:none; }
+.learn a:hover { text-decoration:underline; }
+.links { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); font-size:13px; }
+.links span { color:var(--muted); }
 `;
 
 /** The page script, kept free of backticks/${} so it can live in a template literal. */
@@ -112,11 +122,17 @@ const SCRIPT = [
   "  for(let i=0;i<=4;i++){ const by=ym*i/4; const Y=sy(by); svg+='<line x1='+pad+' y1='+Y+' x2='+(W-12)+' y2='+Y+' stroke=#26324a />'; svg+='<text x='+(pad-6)+' y='+(Y+4)+' fill=#94a3b8 font-size=11 text-anchor=end>'+by.toFixed(2)+'</text>'; }",
   "  svg+='<text x='+(W/2)+' y='+(H-6)+' fill=#94a3b8 font-size=12 text-anchor=middle>ssimulacra2 (higher = better)</text>';",
   "  svg+='<text transform=\"translate(12,'+(H/2)+') rotate(-90)\" fill=#94a3b8 font-size=12 text-anchor=middle>bpp (lower = smaller)</text>';",
-  "  const gx=sx(selS); svg+='<line x1='+gx+' y1=12 x2='+gx+' y2='+(H-pad)+' stroke=#38bdf8 stroke-dasharray=4,3 />';",
+  "  const gx=sx(selS);",
+  "  svg+='<line x1='+gx+' y1=12 x2='+gx+' y2='+(H-pad)+' stroke=#38bdf8 stroke-width=1.5 stroke-dasharray=5,3 />';",
+  "  svg+='<text x='+(gx+ (gx>0.7*W?-5:5))+' y=20 fill=#38bdf8 font-size=11 text-anchor='+(gx>0.7*W?'end':'start')+'>ss2 '+selS.toFixed(1)+'</text>';",
   "  curImage().codecs.forEach(c=>{ let d=''; c.points.forEach((p,i)=>{ d+=(i?'L':'M')+sx(p.s)+' '+sy(p.bpp)+' '; });",
   "    svg+='<path d=\"'+d+'\" fill=none stroke='+c.color+' stroke-width=2 />';",
-  "    c.points.forEach(p=>{ svg+='<circle cx='+sx(p.s)+' cy='+sy(p.bpp)+' r=3 fill='+c.color+' />'; });",
-  "    const it=interp(c.points, selS); svg+='<circle cx='+gx+' cy='+sy(it.bpp)+' r=4.5 fill='+c.color+' stroke=#0f172a stroke-width=1.5 />'; });",
+  "    c.points.forEach(p=>{ svg+='<circle cx='+sx(p.s)+' cy='+sy(p.bpp)+' r=3 fill='+c.color+' />'; }); });",
+  "  const right = gx>0.68*W, lx = right ? gx-9 : gx+9, anch = right ? 'end':'start';",
+  "  let win=null; curImage().codecs.forEach(c=>{ const it=interp(c.points, selS); if(!win||it.bytes<win.bytes) win={c:c, it:it, cy:sy(it.bpp)}; });",
+  "  curImage().codecs.forEach(c=>{ const it=interp(c.points, selS), cy=sy(it.bpp), isWin=c.id===win.c.id;",
+  "    svg+='<circle cx='+gx+' cy='+cy+' r='+(isWin?6:4)+' fill='+c.color+' stroke=#0f172a stroke-width=1.5 />'; });",
+  "  svg+='<text x='+lx+' y='+(win.cy-8)+' fill='+win.c.color+' font-size=11.5 font-weight=700 text-anchor='+anch+'>'+win.c.name+' '+fmtKB(win.it.bytes)+'</text>';",
   "  svg+='</svg>'; $('#chart').innerHTML=svg;",
   "}",
   "function renderReadout(){ const rows=curImage().codecs.map(c=>{ const it=interp(c.points, selS); return {c, bytes:it.bytes, bpp:it.bpp}; });",
@@ -155,13 +171,34 @@ export function buildHtml(report) {
     '<div class="controls"><input id="wipe" type="range" min="0" max="100" value="50"></div>',
     '<div id="formats" class="formats"></div>',
     '<div id="stats" class="stats"></div>',
+    `<p class="note">These are the tool's <b>real encodes</b> at the target (ssimulacra2 ${report.target}), decoded back to PNG. Drag the divider to compare the original with the selected codec. The quality slider on the right does <b>not</b> re-encode or change these images — the encoders run offline, not in the browser.</p>`,
     "</section>",
     '<section class="card"><h2>Rate–distortion &amp; size at quality</h2>',
     '<div id="chart"></div>',
     '<div class="qline">quality (ssimulacra2): <input id="quality" type="range"> <b id="qval"></b></div>',
     '<div id="readout"></div>',
+    '<p class="note">Each dot is one <b>real encode</b>. A curve that sits lower and to the right is better: more quality for fewer bytes. The <b>quality slider</b> reads, from each codec\'s measured curve, how large a file it needs to reach that quality (interpolating between measured points) — it does not run the encoders.</p>',
     "</section>",
-    "</div></main>",
+    "</div>",
+    '<section class="card learn">',
+    "<h2>Understanding what you see</h2>",
+    "<dl>",
+    "<dt>Perceptual target</dt><dd>Every codec is tuned to the same ssimulacra2 score, so we compare file <b>size at equal quality</b>. That is fairer than comparing each codec's own quality number, since those scales are not equivalent.</dd>",
+    '<dt>ssimulacra2</dt><dd>A perceptual quality score comparing the decoded image to the original: higher is closer, ~90 is visually near-transparent. <a href="https://github.com/cloudinary/ssimulacra2" target="_blank" rel="noopener">reference</a></dd>',
+    "<dt>bpp</dt><dd>Bits per pixel = file size in bits ÷ number of pixels. Lower means a smaller file for the same image; it lets you compare images of different sizes.</dd>",
+    '<dt>dssim</dt><dd>Structural dissimilarity: lower is closer to the original. Shown alongside ssimulacra2 as a second opinion. <a href="https://github.com/kornelski/dssim" target="_blank" rel="noopener">reference</a></dd>',
+    "<dt>Rate–distortion</dt><dd>The size-vs-quality trade-off. Each codec's curve is its efficiency: the lower the curve, the fewer bytes it needs for the same quality.</dd>",
+    "</dl>",
+    '<div class="links"><span>Codecs:</span>' +
+      '<a href="https://github.com/libjxl/libjxl" target="_blank" rel="noopener">JPEG XL</a>' +
+      '<a href="https://web.dev/articles/compress-images-avif" target="_blank" rel="noopener">AVIF</a>' +
+      '<a href="https://developers.google.com/speed/webp" target="_blank" rel="noopener">WebP</a>' +
+      '<a href="https://github.com/google/jpegli" target="_blank" rel="noopener">jpegli</a>' +
+      '<a href="https://github.com/mozilla/mozjpeg" target="_blank" rel="noopener">mozjpeg</a>' +
+      '<a href="https://github.com/strukturag/libheif" target="_blank" rel="noopener">HEIC</a>' +
+      "</div>",
+    "</section>",
+    "</main>",
     `<script id="data" type="application/json">${json}</script>`,
     `<script>${SCRIPT}</script>`,
     "</body></html>",
