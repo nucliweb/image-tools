@@ -88,6 +88,8 @@ svg { width:100%; height:auto; display:block; }
 .learn a:hover { text-decoration:underline; }
 .links { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); font-size:13px; }
 .links span { color:var(--muted); }
+.takeaway { margin:4px 2px 16px; padding:12px 16px; background:linear-gradient(90deg, rgba(56,189,248,0.12), rgba(56,189,248,0.02)); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; font-size:14.5px; color:var(--ink); }
+.takeaway b { font-weight:700; }
 `;
 
 /** The page script, kept free of backticks/${} so it can live in a template literal. */
@@ -142,7 +144,16 @@ const SCRIPT = [
   "  rows.forEach(r=>{ h+='<tr class='+(r.bytes===min?'win':'')+'><td><span class=swatch style=background:'+r.c.color+'></span>'+r.c.name+'</td><td>'+fmtKB(r.bytes)+'</td><td>'+r.bpp.toFixed(3)+'</td></tr>'; });",
   "  h+='</table>'; $('#readout').innerHTML=h; $('#qval').textContent=selS.toFixed(1);",
   "}",
-  "function renderAll(){ renderTabs(); renderFormats(); renderViewer(); const [x0,x1]=xrange(); const q=$('#quality'); q.min=x0; q.max=x1; q.step=0.5; if(selS<x0)selS=x0; if(selS>x1)selS=x1; q.value=selS; renderChart(); renderReadout(); }",
+  "function renderTakeaway(){ const cs=curImage().codecs.map(c=>({c:c, bytes:interp(c.points, DATA.target).bytes}));",
+  "  const win=cs.reduce((a,b)=>b.bytes<a.bytes?b:a);",
+  "  let base=cs.find(x=>x.c.id==='mozjpeg'); if(!base||base.c.id===win.c.id) base=cs.reduce((a,b)=>b.bytes>a.bytes?b:a);",
+  "  const pct=Math.round((1-win.bytes/base.bytes)*100);",
+  "  const baseName=base.c.id==='mozjpeg'?'mozjpeg (baseline JPEG)':base.c.name;",
+  "  let msg='At equal quality (ssimulacra2 '+DATA.target+'), <b>'+win.c.name+'</b> is the smallest at <b>'+fmtKB(win.bytes)+'</b>';",
+  "  if(win.c.id!==base.c.id && pct>0) msg+=', about <b>'+pct+'% smaller</b> than '+baseName;",
+  "  $('#takeaway').innerHTML=msg+'.';",
+  "}",
+  "function renderAll(){ renderTabs(); renderTakeaway(); renderFormats(); renderViewer(); const [x0,x1]=xrange(); const q=$('#quality'); q.min=x0; q.max=x1; q.step=0.5; if(selS<x0)selS=x0; if(selS>x1)selS=x1; q.value=selS; renderChart(); renderReadout(); }",
   "$('#wipe').addEventListener('input', e=>{ wipe=+e.target.value; renderViewer(); });",
   "$('#quality').addEventListener('input', e=>{ selS=+e.target.value; renderChart(); renderReadout(); });",
   "renderAll();",
@@ -162,6 +173,7 @@ export function buildHtml(report) {
     `<div class="sub">Equal-quality target: ssimulacra2 ${report.target}. Drag the wipe to compare original vs codec; move the quality slider to read size at any quality.</div></header>`,
     "<main>",
     '<div id="tabs" class="tabs"></div>',
+    '<div id="takeaway" class="takeaway"></div>',
     '<div class="grid">',
     '<section class="card"><h2>Visual comparison</h2>',
     '<div id="viewer" class="viewer"><img id="before" alt="original">',
