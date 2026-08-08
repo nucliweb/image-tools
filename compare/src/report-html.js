@@ -58,12 +58,16 @@ main { padding:12px 28px 48px; max-width:1100px; }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
 .card h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); }
 .viewer { position:relative; width:100%; border-radius:10px; overflow:hidden; background:#000; user-select:none; }
-.viewer img { display:block; width:100%; height:auto; }
+.viewer img { display:block; width:100%; height:auto; transform-origin:0 0; }
 .viewer .after { position:absolute; inset:0; }
 .viewer .after img { position:absolute; inset:0; height:100%; }
 .viewer .handle { position:absolute; top:0; bottom:0; width:2px; background:var(--accent); }
 .labels { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin:6px 2px 0; }
 .controls { margin-top:12px; }
+.zoom { display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:var(--muted); }
+.zoom button { padding:3px 9px; border-radius:7px; border:1px solid var(--line); background:#0b1324; color:var(--ink); cursor:pointer; font-size:12px; }
+.zoom button.active { border-color:var(--accent); color:var(--accent); }
+.zoom .hint { margin-left:auto; font-size:11.5px; }
 input[type=range]{ width:100%; accent-color:var(--accent); }
 .formats { display:flex; gap:6px; flex-wrap:wrap; margin:12px 0 6px; }
 .fmt { padding:5px 10px; border-radius:8px; border:1px solid var(--line); background:#0b1324; color:var(--ink); cursor:pointer; font-size:13px; display:flex; align-items:center; gap:6px; }
@@ -97,6 +101,7 @@ svg { width:100%; height:auto; display:block; }
 const SCRIPT = [
   "const DATA = JSON.parse(document.getElementById('data').textContent);",
   "let imgIdx = 0, codecId = DATA.images[0].codecs[0].id, wipe = 50, selS = DATA.target;",
+  "let zoom = 1, panX = 0, panY = 0;",
   "const $ = (s, r) => (r||document).querySelector(s);",
   "const fmtKB = b => (b/1024).toFixed(1) + ' KB';",
   "function curImage(){ return DATA.images[imgIdx]; }",
@@ -109,13 +114,21 @@ const SCRIPT = [
   "}",
   "function xrange(){ let lo=100, hi=0; curImage().codecs.forEach(c=>c.points.forEach(p=>{lo=Math.min(lo,p.s);hi=Math.max(hi,p.s);})); return [Math.floor(lo-1), Math.ceil(hi+1)]; }",
   "function yMax(){ let m=0; curImage().codecs.forEach(c=>c.points.forEach(p=>{m=Math.max(m,p.bpp);})); return m*1.05; }",
-  "function renderTabs(){ const t=$('#tabs'); t.innerHTML=''; DATA.images.forEach((im,i)=>{ const b=document.createElement('button'); b.className='tab'+(i===imgIdx?' active':''); b.textContent=im.name; b.onclick=()=>{imgIdx=i; codecId=curImage().codecs[0].id; selS=DATA.target; renderAll();}; t.appendChild(b); }); }",
+  "function renderTabs(){ const t=$('#tabs'); t.innerHTML=''; DATA.images.forEach((im,i)=>{ const b=document.createElement('button'); b.className='tab'+(i===imgIdx?' active':''); b.textContent=im.name; b.onclick=()=>{imgIdx=i; codecId=curImage().codecs[0].id; selS=DATA.target; zoom=1; panX=0; panY=0; renderAll();}; t.appendChild(b); }); }",
   "function renderFormats(){ const f=$('#formats'); f.innerHTML=''; curImage().codecs.forEach(c=>{ const b=document.createElement('button'); b.className='fmt'+(c.id===codecId?' active':''); b.innerHTML='<span class=dot style=background:'+c.color+'></span>'+c.name; b.onclick=()=>{codecId=c.id; renderViewer(); renderFormats();}; f.appendChild(b); }); }",
   "function renderViewer(){ const im=curImage(), c=curCodec();",
   "  $('#before').src = im.original; $('#after-img').src = c.preview.uri;",
   "  $('#after').style.clipPath = 'inset(0 0 0 '+wipe+'%)'; $('#handle').style.left = wipe+'%';",
   "  $('#stats').innerHTML = 'format <b>'+c.name+'</b> &nbsp; setting <b>'+c.preview.label+'</b> &nbsp; size <b>'+fmtKB(c.preview.bytes)+'</b> &nbsp; bpp <b>'+c.preview.bpp.toFixed(3)+'</b> &nbsp; ss2 <b>'+c.preview.s.toFixed(2)+'</b> &nbsp; dssim <b>'+c.preview.dssim.toFixed(5)+'</b>';",
+  "  applyZoom();",
   "}",
+  "function applyZoom(){ const t='translate('+panX+'px,'+panY+'px) scale('+zoom+')';",
+  "  $('#before').style.transform=t; $('#after-img').style.transform=t;",
+  "  $('#viewer').style.cursor = zoom>1 ? 'grab' : 'default';",
+  "  document.querySelectorAll('.zoom button').forEach(b=>b.classList.toggle('active', +b.dataset.z===zoom)); }",
+  "function clampPan(V){ panX=Math.min(0, Math.max(V.width*(1-zoom), panX)); panY=Math.min(0, Math.max(V.height*(1-zoom), panY)); if(zoom===1){ panX=0; panY=0; } }",
+  "function setZoom(z){ const V=$('#viewer').getBoundingClientRect(), cx=V.width/2, cy=V.height/2;",
+  "  const contentX=(cx-panX)/zoom, contentY=(cy-panY)/zoom; zoom=z; panX=cx-contentX*z; panY=cy-contentY*z; clampPan(V); applyZoom(); }",
   "function renderChart(){ const W=520,H=320,pad=44; const [x0,x1]=xrange(); const ym=yMax();",
   "  const sx=s=>pad+(s-x0)/(x1-x0)*(W-pad-12); const sy=b=>H-pad-(b/ym)*(H-pad-12);",
   "  let svg='<svg viewBox=\"0 0 '+W+' '+H+'\" role=img>';",
@@ -170,6 +183,12 @@ const SCRIPT = [
   "}",
   "function renderAll(){ renderTabs(); renderTakeaway(); renderFormats(); renderViewer(); const [x0,x1]=xrange(); const q=$('#quality'); q.min=x0; q.max=x1; q.step=0.5; if(selS<x0)selS=x0; if(selS>x1)selS=x1; q.value=selS; renderChart(); renderReadout(); }",
   "$('#wipe').addEventListener('input', e=>{ wipe=+e.target.value; renderViewer(); });",
+  "document.querySelectorAll('.zoom button').forEach(b=>b.addEventListener('click', ()=>setZoom(+b.dataset.z)));",
+  "(function(){ let drag=false, sx=0, sy=0, px=0, py=0; const v=$('#viewer');",
+  "  v.addEventListener('pointerdown', e=>{ if(zoom<=1) return; drag=true; sx=e.clientX; sy=e.clientY; px=panX; py=panY; v.style.cursor='grabbing'; v.setPointerCapture(e.pointerId); });",
+  "  v.addEventListener('pointermove', e=>{ if(!drag) return; panX=px+(e.clientX-sx); panY=py+(e.clientY-sy); clampPan(v.getBoundingClientRect()); applyZoom(); });",
+  "  v.addEventListener('pointerup', ()=>{ drag=false; if(zoom>1) v.style.cursor='grab'; });",
+  "})();",
   "$('#quality').addEventListener('input', e=>{ selS=+e.target.value; renderChart(); renderReadout(); });",
   "renderAll();",
   "renderAggregate();",
@@ -197,6 +216,7 @@ export function buildHtml(report) {
     '<div id="handle" class="handle"></div></div>',
     '<div class="labels"><span>original</span><span>codec</span></div>',
     '<div class="controls"><input id="wipe" type="range" min="0" max="100" value="50"></div>',
+    '<div class="zoom">zoom: <button data-z="1">1×</button><button data-z="2">2×</button><button data-z="4">4×</button><span class="hint">drag to pan when zoomed</span></div>',
     '<div id="formats" class="formats"></div>',
     '<div id="stats" class="stats"></div>',
     `<p class="note">These are the tool's <b>real encodes</b> at the target (ssimulacra2 ${report.target}), decoded back to PNG. Drag the divider to compare the original with the selected codec. The quality slider on the right does <b>not</b> re-encode or change these images — the encoders run offline, not in the browser.</p>`,
