@@ -47,7 +47,10 @@ test("buildHtml produces a self-contained document with embedded data", () => {
   assert.match(html, /JPEG XL/);
   assert.match(html, /data:image\/png;base64,BBBB/); // preview embedded
   assert.ok(html.includes('id="data"'), "carries the data blob");
-  assert.ok(!html.includes("http://") && !html.includes("https://"), "no external references");
+  // Self-contained: nothing the browser would fetch. Anchor links are allowed.
+  assert.ok(!/\bsrc=["']https?:/i.test(html), "no external script/image src");
+  assert.ok(!/<link\b/i.test(html), "no external stylesheet <link>");
+  assert.ok(!/@import|url\(https?:/i.test(html), "no external CSS resources");
 });
 
 test("buildHtml escapes < in embedded JSON to avoid breaking out of the script", () => {
