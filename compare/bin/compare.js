@@ -6,6 +6,7 @@ import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
 import { findQualityForTarget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
+import { run, resolveCommand } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
 import { sweepCodec, nearestPoint } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
@@ -26,6 +27,7 @@ Options:
       --max-iterations <n>  Max search steps per codec (default: 10)
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive self-contained HTML report
+      --html-max-dim <n>    Downscale embedded report images above this size (default: 1600)
       --keep                Keep the temporary work directory
   -h, --help                Show this help
 
@@ -41,6 +43,7 @@ function parse() {
       "max-iterations": { type: "string", default: "10" },
       csv: { type: "string" },
       html: { type: "string" },
+      "html-max-dim": { type: "string", default: "1600" },
       keep: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
@@ -82,6 +85,20 @@ function main() {
   const workdir = mkdtempSync(join(tmpdir(), "image-tools-"));
   try {
     if (values.html) {
+      const maxDim = Number(values["html-max-dim"]);
+      // Embed a PNG as a data URI, downscaling it first (via vipsthumbnail) when
+      // its longest side exceeds maxDim, to keep the report small. Metrics are
+      // unaffected; only the embedded preview is resized.
+      let embedSeq = 0;
+      const embed = (pngPath, dims) => {
+        if (!(maxDim > 0) || Math.max(dims.width, dims.height) <= maxDim) {
+          return pngDataUri(pngPath);
+        }
+        const small = join(workdir, `embed${embedSeq++}.png`);
+        run(resolveCommand("vipsthumbnail"), [pngPath, "--size", String(maxDim), "-o", small]);
+        return pngDataUri(small);
+      };
+
       const report = { target, images: [] };
       images.forEach((image, idx) => {
         const refNorm = join(workdir, `img${idx}.norm.png`);
@@ -103,14 +120,14 @@ function main() {
             id,
             name: codec.name,
             points,
-            preview: { ...prev, dataUri: pngDataUri(prev.decodedPng) },
+            preview: { ...prev, dataUri: embed(prev.decodedPng, dims) },
           };
         });
         report.images.push({
           name: basename(image),
           width: dims.width,
           height: dims.height,
-          originalDataUri: pngDataUri(refNorm),
+          originalDataUri: embed(refNorm, dims),
           codecs,
         });
       });
