@@ -90,6 +90,7 @@ svg { width:100%; height:auto; display:block; }
 .links span { color:var(--muted); }
 .takeaway { margin:4px 2px 16px; padding:12px 16px; background:linear-gradient(90deg, rgba(56,189,248,0.12), rgba(56,189,248,0.02)); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; font-size:14.5px; color:var(--ink); }
 .takeaway b { font-weight:700; }
+#aggregate { margin-top:22px; }
 `;
 
 /** The page script, kept free of backticks/${} so it can live in a template literal. */
@@ -153,10 +154,25 @@ const SCRIPT = [
   "  if(win.c.id!==base.c.id && pct>0) msg+=', about <b>'+pct+'% smaller</b> than '+baseName;",
   "  $('#takeaway').innerHTML=msg+'.';",
   "}",
+  "function renderAggregate(){ const box=$('#aggregate');",
+  "  if(DATA.images.length<2){ box.style.display='none'; return; }",
+  "  const T=DATA.target, order=DATA.images[0].codecs.map(c=>c.id), acc={}, wins={};",
+  "  DATA.images.forEach(im=>{ const rows=im.codecs.map(c=>({id:c.id, name:c.name, color:c.color, bytes:interp(c.points,T).bytes, bpp:interp(c.points,T).bpp}));",
+  "    const moz=rows.find(r=>r.id==='mozjpeg');",
+  "    const w=rows.reduce((a,b)=>b.bytes<a.bytes?b:a); wins[w.id]=(wins[w.id]||0)+1;",
+  "    rows.forEach(r=>{ const e=acc[r.id]||(acc[r.id]={name:r.name,color:r.color,bpps:[],sav:[]}); e.bpps.push(r.bpp); if(moz&&moz.bytes>0) e.sav.push((1-r.bytes/moz.bytes)*100); }); });",
+  "  const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;",
+  "  const rows=order.map(id=>({id, name:acc[id].name, color:acc[id].color, avgBpp:mean(acc[id].bpps), sav:acc[id].sav.length?mean(acc[id].sav):null, wins:wins[id]||0}));",
+  "  rows.sort((a,b)=>a.avgBpp-b.avgBpp); const best=rows[0].id;",
+  "  let h='<table class=readout><tr><th>codec</th><th>avg bpp</th><th>wins</th><th>savings vs mozjpeg</th></tr>';",
+  "  rows.forEach(r=>{ h+='<tr class='+(r.id===best?'win':'')+'><td><span class=swatch style=background:'+r.color+'></span>'+r.name+'</td><td>'+r.avgBpp.toFixed(3)+'</td><td>'+r.wins+'/'+DATA.images.length+'</td><td>'+(r.sav===null?'n/a':(r.sav.toFixed(1)+'%'))+'</td></tr>'; });",
+  "  h+='</table>'; $('#aggregate .agg').innerHTML=h;",
+  "}",
   "function renderAll(){ renderTabs(); renderTakeaway(); renderFormats(); renderViewer(); const [x0,x1]=xrange(); const q=$('#quality'); q.min=x0; q.max=x1; q.step=0.5; if(selS<x0)selS=x0; if(selS>x1)selS=x1; q.value=selS; renderChart(); renderReadout(); }",
   "$('#wipe').addEventListener('input', e=>{ wipe=+e.target.value; renderViewer(); });",
   "$('#quality').addEventListener('input', e=>{ selS=+e.target.value; renderChart(); renderReadout(); });",
   "renderAll();",
+  "renderAggregate();",
 ].join("\n");
 
 /** Build the full standalone HTML document for a report. */
@@ -192,6 +208,7 @@ export function buildHtml(report) {
     '<p class="note">Each dot is one <b>real encode</b>. A curve that sits lower and to the right is better: more quality for fewer bytes. The <b>quality slider</b> reads, from each codec\'s measured curve, how large a file it needs to reach that quality (interpolating between measured points) — it does not run the encoders.</p>',
     "</section>",
     "</div>",
+    '<section id="aggregate" class="card"><h2>Across all images</h2><div class="agg"></div></section>',
     '<section class="card learn">',
     "<h2>Understanding what you see</h2>",
     "<dl>",
