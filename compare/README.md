@@ -41,6 +41,7 @@ Options:
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
+| `--html-max-dim <n>` | `1600` | Downscale embedded report images above this size |
 | `--keep` | off | Keep the temporary work directory |
 
 ## Interactive HTML report
@@ -50,12 +51,23 @@ external assets) that sweeps each codec across a range of quality points and let
 you explore the trade-off interactively:
 
 - a **before/after wipe** between the original and each codec at the target quality,
+- **zoom and pan** to inspect artifacts, kept in place while you toggle formats,
 - a **format toggle** with live size / bpp / ssimulacra2 / dssim,
+- a **plain-language takeaway** and, for a batch, an **across-all-images** summary,
 - a **rate–distortion chart** (bpp vs ssimulacra2) with one curve per codec,
 - a **quality slider** that reads each codec's size at any quality level.
 
 ```bash
 compare-codecs demos/images --target 90 --html report.html
+```
+
+The report embeds the decoded previews at full resolution so the zoom stays sharp,
+which makes large batches heavy. `--html-max-dim <n>` downscales embedded images
+above `n` pixels on the longest side (metrics are unaffected; only the previews are
+resized), trading zoom detail for a smaller file:
+
+```bash
+compare-codecs photos/ --target 90 --html-max-dim 800 --html report.html
 ```
 
 See `demos/` for a ready-to-run example (run `demos/fetch.sh` first to get the
