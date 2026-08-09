@@ -1,0 +1,33 @@
+name: Image E2E
+
+# Heavy end-to-end job: builds the Docker image (which compiles codecs from
+# source) and runs the integration tests and smoke test inside it. It does not
+# run on every pull request; only on pushes to main and on demand.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  image:
+    name: Build image, run integration + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: image-tools:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Integration tests (inside the image)
+        run: docker run --rm --entrypoint bash image-tools:ci -c "cd /opt/image-tools/compare && node --test"
+
+      - name: Smoke test (inside the image)
+        run: docker run --rm --entrypoint bash image-tools:ci -c "$(cat smoke-test.sh)"
