@@ -78,15 +78,26 @@ sample images).
 An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 
 ```
-+---------+--------------+---------+-------+-------------+---------+-------+
-| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters |
-+---------+--------------+---------+-------+-------------+---------+-------+
-| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |
-| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |
-| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |
-| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |
-+---------+--------------+---------+-------+-------------+---------+-------+
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
+| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
+| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |  60 ms | 240 ms |
+| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |  48 ms | 120 ms |
+| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |  50 ms | 150 ms |
+| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |  22 ms |  22 ms |
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
 ```
+
+`encode` is the wall-clock time of the single encode at the target quality, and
+`cpu` its CPU time (user + sys). Their ratio shows how much the codec parallelized:
+`cpu / encode ≈ 4` means it kept about four cores busy. Both are measured with
+`/usr/bin/time` (the `time` package, present in the Docker image); where it is not
+available they show `n/a`. The CSV adds `encode_wall_ms` and `encode_cpu_ms`.
+
+Unlike the size and quality figures, timing is **not deterministic**: it depends on
+the machine, its load, and the tool versions and build flags. CPU time is the
+stabler of the two, but treat both as indicative, measure inside the Docker image on
+an idle machine for the most comparable numbers, and don't gate CI on them.
 
 ## How it works
 

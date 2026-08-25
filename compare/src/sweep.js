@@ -18,6 +18,8 @@ export function sweepCodec(codec, refNorm, pixels, workdir) {
       ssimulacra2: m.score,
       dssim: dssim(refNorm, m.decodedPng),
       decodedPng: m.decodedPng,
+      encodeWallMs: m.encodeWallMs,
+      encodeCpuMs: m.encodeCpuMs,
     };
   });
   points.sort((a, b) => a.ssimulacra2 - b.ssimulacra2);

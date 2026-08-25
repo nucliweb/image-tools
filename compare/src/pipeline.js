@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { run, resolveCommand } from "./exec.js";
+import { run, runTimed, resolveCommand } from "./exec.js";
 import { ssimulacra2, dssim } from "./metrics.js";
 import { searchForTarget } from "./search.js";
 import { pngDimensions, writeStrippedPng } from "./image.js";
@@ -9,14 +9,16 @@ import { pngDimensions, writeStrippedPng } from "./image.js";
  * Encode the reference at a given knob, decode back to PNG, strip the decoded
  * PNG to critical chunks (so ssimulacra2 can read every codec's output), and
  * measure it. The reference is expected to be already normalized.
- * @returns {{ score: number, bytes: number, decodedPng: string }}
+ * Timing (wall and CPU) is measured for the encode step only, since that is the
+ * codec's own cost; decoding and metrics are the harness's measurement tools.
+ * @returns {{ score, bytes, decodedPng, encodeWallMs, encodeCpuMs }}
  */
 export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "") {
   const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
   const decodedRaw = join(workdir, `${codec.id}${tag}.dec.raw.png`);
   const decodedPng = join(workdir, `${codec.id}${tag}.dec.png`);
 
-  run(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
+  const timing = runTimed(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
   run(resolveCommand(codec.decoder), codec.decodeArgs(encoded, decodedRaw));
   writeStrippedPng(decodedRaw, decodedPng);
 
@@ -24,6 +26,8 @@ export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = ""
     score: ssimulacra2(referencePng, decodedPng),
     bytes: statSync(encoded).size,
     decodedPng,
+    encodeWallMs: timing.wallMs,
+    encodeCpuMs: timing.cpuMs,
   };
 }
 
@@ -31,7 +35,7 @@ export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = ""
  * Search a codec's quality knob until the decoded image reaches the target
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
- * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations }}
+ * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations, reached, encodeWallMs, encodeCpuMs }}
  */
 export function findQualityForTarget(codec, referencePng, target, workdir, opts = {}) {
   // Normalize the reference once: strip ancillary chunks so ssimulacra2/dssim can
@@ -65,5 +69,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     bpp: (final.bytes * 8) / pixels,
     iterations: search.iterations,
     reached: Math.abs(final.score - target) <= tolerance,
+    encodeWallMs: final.encodeWallMs,
+    encodeCpuMs: final.encodeCpuMs,
   };
 }

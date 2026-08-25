@@ -5,6 +5,18 @@ function formatBytes(bytes) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+/** Format a duration in ms for a human: "n/a" when unmeasured, ms under a second, else seconds. */
+function formatDuration(ms) {
+  if (ms === null || ms === undefined) return "n/a";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
+}
+
+/** A raw ms value for CSV: an empty field when unmeasured, otherwise rounded. */
+function csvMs(ms) {
+  return ms === null || ms === undefined ? "" : String(Math.round(ms));
+}
+
 /**
  * Render a fixed-width ASCII table with +/-/| borders, so columns stay aligned
  * in a terminal. `columns` gives each header and its alignment; `rows` is an
@@ -45,6 +57,8 @@ export function toComparisonTable(results, meta) {
     { header: "ssimulacra2", align: "right" },
     { header: "dssim", align: "right" },
     { header: "iters", align: "right" },
+    { header: "encode", align: "right" },
+    { header: "cpu", align: "right" },
   ];
   const body = rows.map((r) => [
     r.name,
@@ -54,6 +68,8 @@ export function toComparisonTable(results, meta) {
     `${r.ssimulacra2.toFixed(2)}${r.reached === false ? " *" : ""}`,
     r.dssim.toFixed(5),
     String(r.iterations),
+    formatDuration(r.encodeWallMs),
+    formatDuration(r.encodeCpuMs),
   ]);
   const heading = [
     `Codec comparison — ${meta.reference} (${meta.width}×${meta.height})`,
@@ -89,13 +105,15 @@ export function toAggregateTable(rows, meta) {
 
 /** Render batch results as CSV, one row per (image, codec). */
 export function toBatchCsv(perImage) {
-  const head = "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations";
+  const head =
+    "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,encode_wall_ms,encode_cpu_ms";
   const lines = [];
   for (const { image, results } of perImage) {
     for (const r of [...results].sort(bySizeAscending)) {
       lines.push(
         `${image},${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
-          `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.reached},${r.iterations}`,
+          `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.reached},${r.iterations},` +
+          `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)}`,
       );
     }
   }
@@ -105,11 +123,12 @@ export function toBatchCsv(perImage) {
 /** Render results as CSV, smallest file first. */
 export function toCsv(results) {
   const rows = [...results].sort(bySizeAscending);
-  const header = "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations";
+  const header = "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms";
   const body = rows.map(
     (r) =>
       `${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
-      `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.iterations}`,
+      `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.iterations},` +
+      `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)}`,
   );
   return [header, ...body].join("\n");
 }
