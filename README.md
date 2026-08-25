@@ -121,6 +121,7 @@ cd compare && node --test test/integration.test.js
 | `INVENTORY.md` | Full inventory of the bundled tools |
 | `decisions/` | Architecture decision records (ADRs) |
 | `.github/workflows/` | CI: unit + integration tests, and the image E2E build |
+| `ROADMAP.md` | Ideas under consideration |
 | `CONTRIBUTING.md` | Commit convention and workflow |
 
 ## License
