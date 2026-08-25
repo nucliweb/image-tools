@@ -106,7 +106,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       webp libavif-bin libjpeg-turbo-progs libheif-examples \
       imagemagick libvips-tools ffmpeg libimage-exiftool-perl \
       pngquant optipng zopfli advancecomp pngcrush gifsicle jpegoptim guetzli \
-      openimageio-tools nodejs \
+      openimageio-tools nodejs time \
       libbrotli1 libhwy1 libpng16-16 libjpeg62-turbo libgif7 liblcms2-2 \
     && rm -rf /var/lib/apt/lists/*
 

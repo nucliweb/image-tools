@@ -33,6 +33,8 @@ const report = {
             dssim: 0.001,
             label: "-d 1",
             dataUri: "data:image/png;base64,BBBB",
+            encodeWallMs: 120,
+            encodeCpuMs: 350,
           },
         },
       ],
@@ -46,6 +48,8 @@ test("buildHtml produces a self-contained document with embedded data", () => {
   assert.match(html, /Codec comparison/);
   assert.match(html, /JPEG XL/);
   assert.match(html, /data:image\/png;base64,BBBB/); // preview embedded
+  assert.match(html, /"encMs":120/, "carries encode wall time"); // stats panel timing
+  assert.match(html, /"cpuMs":350/, "carries encode cpu time");
   assert.ok(html.includes('id="data"'), "carries the data blob");
   assert.ok(html.includes('id="takeaway"'), "has the plain-language takeaway");
   assert.ok(html.includes('id="aggregate"'), "has the cross-image aggregate section");
