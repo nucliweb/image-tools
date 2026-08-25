@@ -25,6 +25,7 @@ Options:
   -c, --codecs <list>       Comma-separated: ${DEFAULT_CODECS.join(",")} (default: all)
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
+      --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive self-contained HTML report
@@ -47,6 +48,7 @@ function parse() {
       codecs: { type: "string", short: "c" },
       tolerance: { type: "string", default: "0.5" },
       "max-iterations": { type: "string", default: "10" },
+      effort: { type: "string" },
       "time-runs": { type: "string", default: "1" },
       csv: { type: "string" },
       html: { type: "string" },
@@ -70,6 +72,14 @@ function main() {
   const tolerance = Number(values.tolerance);
   const maxIterations = Number(values["max-iterations"]);
   const timeRuns = Math.max(1, Math.floor(Number(values["time-runs"])) || 1);
+  let effort = null;
+  if (values.effort !== undefined) {
+    effort = Number(values.effort);
+    if (!Number.isFinite(effort) || effort < 0 || effort > 10) {
+      console.error("--effort must be a number in 0..10.");
+      process.exit(1);
+    }
+  }
   const ids = values.codecs ? values.codecs.split(",").map((s) => s.trim()) : DEFAULT_CODECS;
 
   const unknown = ids.filter((id) => !CODECS[id]);
@@ -122,13 +132,13 @@ function main() {
         const codecs = ids.map((id) => {
           const codec = CODECS[id];
           process.stderr.write(`  ~ ${codec.name} sweep …\n`);
-          const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir);
+          const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
           const prev = nearestPoint(points, target);
           // With more than one timing run, re-time the preview point and report the
           // median; a single run reuses the sweep's own timing sample.
           const timing =
             timeRuns > 1
-              ? medianEncodeTiming(codec, refNorm, prev.knob, workdir, timeRuns)
+              ? medianEncodeTiming(codec, refNorm, prev.knob, workdir, timeRuns, effort)
               : { wallMs: prev.encodeWallMs, cpuMs: prev.encodeCpuMs };
           return {
             id,
@@ -179,6 +189,7 @@ function main() {
           tolerance,
           maxIterations,
           timeRuns,
+          effort,
           referenceNorm: refNorm,
         });
       });
@@ -192,7 +203,7 @@ function main() {
     }
 
     const blocks = perImage.map((p) =>
-      toComparisonTable(p.results, { reference: p.image, width: p.width, height: p.height, target }),
+      toComparisonTable(p.results, { reference: p.image, width: p.width, height: p.height, target, effort }),
     );
     console.log(blocks.join("\n\n"));
 

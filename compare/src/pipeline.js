@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { run, runTimed, resolveCommand } from "./exec.js";
+import { buildEncodeArgs } from "./codecs.js";
 import { ssimulacra2, dssim } from "./metrics.js";
 import { searchForTarget } from "./search.js";
 import { pngDimensions, writeStrippedPng } from "./image.js";
@@ -13,12 +14,12 @@ import { pngDimensions, writeStrippedPng } from "./image.js";
  * codec's own cost; decoding and metrics are the harness's measurement tools.
  * @returns {{ score, bytes, decodedPng, encodeWallMs, encodeCpuMs }}
  */
-export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "") {
+export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "", effort = null) {
   const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
   const decodedRaw = join(workdir, `${codec.id}${tag}.dec.raw.png`);
   const decodedPng = join(workdir, `${codec.id}${tag}.dec.png`);
 
-  const timing = runTimed(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
+  const timing = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, referencePng, encoded, knob, effort));
   run(resolveCommand(codec.decoder), codec.decodeArgs(encoded, decodedRaw));
   writeStrippedPng(decodedRaw, decodedPng);
 
@@ -48,12 +49,12 @@ export function median(values) {
  * timing sample (scheduling, cache state); the median rejects the odd outlier.
  * @returns {{ wallMs: number | null, cpuMs: number | null }}
  */
-export function medianEncodeTiming(codec, referencePng, knob, workdir, runs) {
+export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, effort = null) {
   const encoded = join(workdir, `${codec.id}.timing.${codec.ext}`);
   const wall = [];
   const cpu = [];
   for (let i = 0; i < runs; i++) {
-    const t = runTimed(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
+    const t = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, referencePng, encoded, knob, effort));
     wall.push(t.wallMs);
     cpu.push(t.cpuMs);
   }
@@ -73,6 +74,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
   const refNorm = opts.referenceNorm ?? join(workdir, "reference.norm.png");
   if (!opts.referenceNorm) writeStrippedPng(referencePng, refNorm);
   const { pixels } = pngDimensions(refNorm);
+  const effort = opts.effort ?? null;
 
   // Accumulate the encoder's own time across every encode the search performs, plus
   // the final one, for a per-codec "total encode effort". If any sample is missing
@@ -96,14 +98,14 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     maxIterations: opts.maxIterations ?? 10,
     increasing: codec.knob.increasing,
     evaluate: (knob) => {
-      const m = encodeDecodeMeasure(codec, refNorm, knob, workdir);
+      const m = encodeDecodeMeasure(codec, refNorm, knob, workdir, "", effort);
       addEncode(m);
       return m.score;
     },
   });
 
   // Re-encode at the chosen knob to read the definitive size and decoded output.
-  const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir);
+  const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir, "", effort);
   addEncode(final);
   const tolerance = opts.tolerance ?? 0.5;
 
@@ -112,7 +114,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
   const timeRuns = Math.max(1, Math.floor(opts.timeRuns ?? 1));
   const timing =
     timeRuns > 1
-      ? medianEncodeTiming(codec, refNorm, search.value, workdir, timeRuns)
+      ? medianEncodeTiming(codec, refNorm, search.value, workdir, timeRuns, effort)
       : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs };
 
   return {

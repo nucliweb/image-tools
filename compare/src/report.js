@@ -78,6 +78,9 @@ export function toComparisonTable(results, meta) {
   const heading = [
     `Codec comparison — ${meta.reference} (${meta.width}×${meta.height})`,
     `Target: ssimulacra2 ${meta.target} (equal perceptual quality; compare size).`,
+    ...(meta.effort === null || meta.effort === undefined
+      ? []
+      : [`Effort: ${meta.effort} (matched where supported; codecs without an effort knob use their default).`]),
     "",
   ];
   const footnote = rows.some((r) => r.reached === false)

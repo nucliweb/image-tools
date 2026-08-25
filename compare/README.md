@@ -39,6 +39,7 @@ Options:
 | `-c, --codecs <list>` | all | Comma-separated subset of `jxl,avif,webp,jpegli,mozjpeg,heic` |
 | `--tolerance <n>` | `0.5` | Stop searching once within this of the target |
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
+| `--effort <0..10>` | codec default | Matched encoder effort across codecs that have the knob (higher = slower) |
 | `--time-runs <n>` | `1` | Time each codec's encode n times and report the median |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
@@ -119,6 +120,26 @@ Unlike the size and quality figures, timing is **not deterministic**: it depends
 the machine, its load, and the tool versions and build flags. CPU time is the
 stabler of the two, but treat both as indicative, measure inside the Docker image on
 an idle machine for the most comparable numbers, and don't gate CI on them.
+
+## Matched effort
+
+By default each codec encodes at its own effort/speed preset (cjxl `-e 7`, avifenc
+`-s 6`, cwebp `-m 4`), which are different points on each codec's speed/size curve, so
+cross-codec timing is not directly comparable. `--effort <0..10>` pins one normalized
+effort (higher = slower, more thorough) across the codecs that expose the knob:
+
+- **JPEG XL** — `cjxl -e` (1..10)
+- **AVIF** — `avifenc -s`, inverted (effort 10 maps to speed 0, the slowest)
+- **WebP** — `cwebp -m` (0..6)
+
+jpegli, mozjpeg and HEIC have no comparable knob and keep their defaults. This is not
+a claim that the codecs do equal work at the same number, they don't; it replaces each
+codec's arbitrary default with one stated setting, so timing and size are read at a
+deliberate, comparable operating point:
+
+```bash
+compare-codecs reference.png --target 90 --effort 9 --time-runs 3
+```
 
 ## How it works
 
