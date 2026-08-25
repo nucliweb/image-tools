@@ -64,7 +64,8 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs) {
  * Search a codec's quality knob until the decoded image reaches the target
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
- * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations, reached, encodeWallMs, encodeCpuMs }}
+ * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations, reached,
+ *   encodeWallMs, encodeCpuMs, totalEncodeWallMs, totalEncodeCpuMs }}
  */
 export function findQualityForTarget(codec, referencePng, target, workdir, opts = {}) {
   // Normalize the reference once: strip ancillary chunks so ssimulacra2/dssim can
@@ -73,6 +74,20 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
   if (!opts.referenceNorm) writeStrippedPng(referencePng, refNorm);
   const { pixels } = pngDimensions(refNorm);
 
+  // Accumulate the encoder's own time across every encode the search performs, plus
+  // the final one, for a per-codec "total encode effort". If any sample is missing
+  // (no /usr/bin/time) the total is reported as null rather than an undercount.
+  let totalWallMs = 0;
+  let totalCpuMs = 0;
+  let timingComplete = true;
+  const addEncode = (m) => {
+    if (m.encodeWallMs === null || m.encodeCpuMs === null) timingComplete = false;
+    else {
+      totalWallMs += m.encodeWallMs;
+      totalCpuMs += m.encodeCpuMs;
+    }
+  };
+
   const search = searchForTarget({
     lo: codec.knob.lo,
     hi: codec.knob.hi,
@@ -80,11 +95,16 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     tolerance: opts.tolerance ?? 0.5,
     maxIterations: opts.maxIterations ?? 10,
     increasing: codec.knob.increasing,
-    evaluate: (knob) => encodeDecodeMeasure(codec, refNorm, knob, workdir).score,
+    evaluate: (knob) => {
+      const m = encodeDecodeMeasure(codec, refNorm, knob, workdir);
+      addEncode(m);
+      return m.score;
+    },
   });
 
   // Re-encode at the chosen knob to read the definitive size and decoded output.
   const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir);
+  addEncode(final);
   const tolerance = opts.tolerance ?? 0.5;
 
   // Timing: reuse the final encode's sample for the default single run (no extra
@@ -108,5 +128,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     reached: Math.abs(final.score - target) <= tolerance,
     encodeWallMs: timing.wallMs,
     encodeCpuMs: timing.cpuMs,
+    totalEncodeWallMs: timingComplete ? totalWallMs : null,
+    totalEncodeCpuMs: timingComplete ? totalCpuMs : null,
   };
 }

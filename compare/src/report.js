@@ -59,6 +59,8 @@ export function toComparisonTable(results, meta) {
     { header: "iters", align: "right" },
     { header: "encode", align: "right" },
     { header: "cpu", align: "right" },
+    { header: "enc total", align: "right" },
+    { header: "cpu total", align: "right" },
   ];
   const body = rows.map((r) => [
     r.name,
@@ -70,6 +72,8 @@ export function toComparisonTable(results, meta) {
     String(r.iterations),
     formatDuration(r.encodeWallMs),
     formatDuration(r.encodeCpuMs),
+    formatDuration(r.totalEncodeWallMs),
+    formatDuration(r.totalEncodeCpuMs),
   ]);
   const heading = [
     `Codec comparison — ${meta.reference} (${meta.width}×${meta.height})`,
@@ -106,14 +110,16 @@ export function toAggregateTable(rows, meta) {
 /** Render batch results as CSV, one row per (image, codec). */
 export function toBatchCsv(perImage) {
   const head =
-    "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,encode_wall_ms,encode_cpu_ms";
+    "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations," +
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms";
   const lines = [];
   for (const { image, results } of perImage) {
     for (const r of [...results].sort(bySizeAscending)) {
       lines.push(
         `${image},${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
           `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.reached},${r.iterations},` +
-          `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)}`,
+          `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
+          `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
       );
     }
   }
@@ -123,12 +129,15 @@ export function toBatchCsv(perImage) {
 /** Render results as CSV, smallest file first. */
 export function toCsv(results) {
   const rows = [...results].sort(bySizeAscending);
-  const header = "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms";
+  const header =
+    "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations," +
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms";
   const body = rows.map(
     (r) =>
       `${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
       `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.iterations},` +
-      `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)}`,
+      `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
+      `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
   );
   return [header, ...body].join("\n");
 }
