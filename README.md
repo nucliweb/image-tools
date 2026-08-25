@@ -1,5 +1,7 @@
 # image-tools
 
+[![CI](https://github.com/nucliweb/image-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/nucliweb/image-tools/actions/workflows/ci.yml)
+
 A reproducible toolbox and comparison harness for image codecs and quality validation. It bundles every major image encoder, decoder and optimizer together with the perceptual quality metrics, so codec comparisons are apples-to-apples.
 
 ## What it is
@@ -93,6 +95,22 @@ docker build -t image-tools .
 docker run --rm --entrypoint bash image-tools -c "$(cat smoke-test.sh)"
 ```
 
+## Testing
+
+Three layers, all run in CI:
+
+```bash
+# Unit tests: pure logic (search, metrics, report generation), zero external tools
+cd compare && node --test
+
+# Integration tests: real encode → decode → measure; skip automatically when codecs are absent
+cd compare && node --test test/integration.test.js
+```
+
+- **Unit tests** run on every push and pull request via [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on the current Node LTS.
+- **Integration tests** exercise the full pipeline against the actual codecs and self-generated images; they skip cleanly where the codecs are not installed.
+- **Image E2E** ([`.github/workflows/image.yml`](.github/workflows/image.yml), on `main` and on demand) builds the Docker image, runs the test suite inside it, and finishes with `smoke-test.sh`, so a green run proves every bundled tool works end to end.
+
 ## Repository layout
 
 | Path | What it is |
@@ -102,6 +120,7 @@ docker run --rm --entrypoint bash image-tools -c "$(cat smoke-test.sh)"
 | `smoke-test.sh` | Runtime verification of the toolbox |
 | `INVENTORY.md` | Full inventory of the bundled tools |
 | `decisions/` | Architecture decision records (ADRs) |
+| `.github/workflows/` | CI: unit + integration tests, and the image E2E build |
 | `CONTRIBUTING.md` | Commit convention and workflow |
 
 ## License
