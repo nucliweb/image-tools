@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
-import { findQualityForTarget } from "../src/pipeline.js";
+import { findQualityForTarget, medianEncodeTiming } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
 import { run, resolveCommand } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
@@ -25,13 +25,19 @@ Options:
   -c, --codecs <list>       Comma-separated: ${DEFAULT_CODECS.join(",")} (default: all)
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
+      --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive self-contained HTML report
       --html-max-dim <n>    Downscale embedded report images above this size (default: 1600)
       --keep                Keep the temporary work directory
   -h, --help                Show this help
 
-The reference must be a PNG in sRGB.`;
+The reference must be a PNG in sRGB.
+
+In the results, the iters column is the number of binary-search steps taken to
+reach the equal-quality setting (each at a different quality), not timing
+repetitions. The encode/cpu columns time a single encode at that setting; use
+--time-runs to repeat it and report the median.`;
 
 function parse() {
   const { values, positionals } = parseArgs({
@@ -41,6 +47,7 @@ function parse() {
       codecs: { type: "string", short: "c" },
       tolerance: { type: "string", default: "0.5" },
       "max-iterations": { type: "string", default: "10" },
+      "time-runs": { type: "string", default: "1" },
       csv: { type: "string" },
       html: { type: "string" },
       "html-max-dim": { type: "string", default: "1600" },
@@ -62,6 +69,7 @@ function main() {
   const target = Number(values.target);
   const tolerance = Number(values.tolerance);
   const maxIterations = Number(values["max-iterations"]);
+  const timeRuns = Math.max(1, Math.floor(Number(values["time-runs"])) || 1);
   const ids = values.codecs ? values.codecs.split(",").map((s) => s.trim()) : DEFAULT_CODECS;
 
   const unknown = ids.filter((id) => !CODECS[id]);
@@ -116,11 +124,22 @@ function main() {
           process.stderr.write(`  ~ ${codec.name} sweep …\n`);
           const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir);
           const prev = nearestPoint(points, target);
+          // With more than one timing run, re-time the preview point and report the
+          // median; a single run reuses the sweep's own timing sample.
+          const timing =
+            timeRuns > 1
+              ? medianEncodeTiming(codec, refNorm, prev.knob, workdir, timeRuns)
+              : { wallMs: prev.encodeWallMs, cpuMs: prev.encodeCpuMs };
           return {
             id,
             name: codec.name,
             points,
-            preview: { ...prev, dataUri: embed(prev.decodedPng, dims) },
+            preview: {
+              ...prev,
+              dataUri: embed(prev.decodedPng, dims),
+              encodeWallMs: timing.wallMs,
+              encodeCpuMs: timing.cpuMs,
+            },
           };
         });
         report.images.push({
@@ -159,6 +178,7 @@ function main() {
         return findQualityForTarget(CODECS[id], image, target, workdir, {
           tolerance,
           maxIterations,
+          timeRuns,
           referenceNorm: refNorm,
         });
       });

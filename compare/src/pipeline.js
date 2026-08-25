@@ -32,6 +32,35 @@ export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = ""
 }
 
 /**
+ * Median of a list of numbers. Returns null if the list is empty or any sample is
+ * missing, so timing that could not be measured propagates as null rather than NaN.
+ */
+export function median(values) {
+  if (values.length === 0 || values.some((v) => v === null || v === undefined)) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Time the codec's encode at a knob `runs` times and return the median wall and
+ * CPU time. Repeating and taking the median damps the run-to-run noise of a single
+ * timing sample (scheduling, cache state); the median rejects the odd outlier.
+ * @returns {{ wallMs: number | null, cpuMs: number | null }}
+ */
+export function medianEncodeTiming(codec, referencePng, knob, workdir, runs) {
+  const encoded = join(workdir, `${codec.id}.timing.${codec.ext}`);
+  const wall = [];
+  const cpu = [];
+  for (let i = 0; i < runs; i++) {
+    const t = runTimed(resolveCommand(codec.encoder), codec.encodeArgs(referencePng, encoded, knob));
+    wall.push(t.wallMs);
+    cpu.push(t.cpuMs);
+  }
+  return { wallMs: median(wall), cpuMs: median(cpu) };
+}
+
+/**
  * Search a codec's quality knob until the decoded image reaches the target
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
@@ -58,6 +87,14 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
   const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir);
   const tolerance = opts.tolerance ?? 0.5;
 
+  // Timing: reuse the final encode's sample for the default single run (no extra
+  // work); for more runs, re-time the encode and report the median to cut noise.
+  const timeRuns = Math.max(1, Math.floor(opts.timeRuns ?? 1));
+  const timing =
+    timeRuns > 1
+      ? medianEncodeTiming(codec, refNorm, search.value, workdir, timeRuns)
+      : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs };
+
   return {
     id: codec.id,
     name: codec.name,
@@ -69,7 +106,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     bpp: (final.bytes * 8) / pixels,
     iterations: search.iterations,
     reached: Math.abs(final.score - target) <= tolerance,
-    encodeWallMs: final.encodeWallMs,
-    encodeCpuMs: final.encodeCpuMs,
+    encodeWallMs: timing.wallMs,
+    encodeCpuMs: timing.cpuMs,
   };
 }

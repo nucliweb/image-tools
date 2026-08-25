@@ -55,6 +55,7 @@ compare-codecs <image-or-dir...> [options]
   -c, --codecs <list>       Comma-separated: jxl,avif,webp,jpegli,mozjpeg,heic (default: all)
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
+      --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive, self-contained HTML report
       --keep                Keep the temporary work directory
