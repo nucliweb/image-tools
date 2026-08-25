@@ -1,0 +1,70 @@
+name: Codec comparison (demo report)
+
+# Runs the comparison tool end to end on the demo images inside the built image,
+# and publishes the result as a report: the table goes to the run's job summary,
+# and the HTML report + CSV are uploaded as artifacts. It only reports; it does
+# not gate. Size at equal quality is deterministic (codec versions are pinned in
+# the image); the timing columns are informational and are not asserted on.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target ssimulacra2 score"
+        default: "90"
+      effort:
+        description: "Matched encoder effort 0..10 (blank = each codec's default)"
+        default: ""
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare codecs on the demo images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: image-tools:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Fetch demo images
+        run: bash compare/demos/fetch.sh
+
+      - name: Run codec comparison
+        run: |
+          TARGET="${{ github.event.inputs.target || '90' }}"
+          EFFORT="${{ github.event.inputs.effort || '' }}"
+          BASE="compare-codecs compare/demos/images --target $TARGET"
+          [ -n "$EFFORT" ] && BASE="$BASE --effort $EFFORT"
+          # The table (stdout) + CSV come from the search; the interactive HTML is a
+          # separate sweep-based mode, so it is a second invocation.
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
+            "$BASE --csv results.csv" | tee comparison.txt
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
+            "$BASE --html report.html"
+          {
+            echo "## Codec comparison — demo images (target ss2 $TARGET${EFFORT:+, effort $EFFORT})"
+            echo ""
+            echo '```'
+            cat comparison.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report and CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: codec-comparison
+          path: |
+            report.html
+            results.csv
