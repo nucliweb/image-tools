@@ -75,14 +75,17 @@ sample images).
 
 ## Output
 
-A Markdown table (and optional CSV), sorted by file size so the smallest wins:
+An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 
 ```
-| Codec   | Setting   | Size    | bpp   | ssimulacra2 | dssim   | iters |
-| JPEG XL | -d 1.08   | 15.5 KB | 0.826 | 90.38       | 0.00044 | 6     |
-| jpegli  | -d 0.97   | 21.7 KB | 1.155 | 89.74       | 0.00050 | 7     |
-| AVIF    | --min/max 10 | 25.3 KB | 1.349 | 90.39    | 0.00030 | 5     |
-| WebP    | -q 97     | 29.8 KB | 1.589 | 89.63       | 0.00036 | 5     |
++---------+--------------+---------+-------+-------------+---------+-------+
+| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters |
++---------+--------------+---------+-------+-------------+---------+-------+
+| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |
+| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |
+| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |
+| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |
++---------+--------------+---------+-------+-------------+---------+-------+
 ```
 
 ## How it works

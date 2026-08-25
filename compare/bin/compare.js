@@ -10,7 +10,7 @@ import { run, resolveCommand } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
 import { sweepCodec, nearestPoint } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
-import { toMarkdownTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
+import { toComparisonTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
 
 const USAGE = `Usage: compare-codecs <image-or-dir...> [options]
 
@@ -172,7 +172,7 @@ function main() {
     }
 
     const blocks = perImage.map((p) =>
-      toMarkdownTable(p.results, { reference: p.image, width: p.width, height: p.height, target }),
+      toComparisonTable(p.results, { reference: p.image, width: p.width, height: p.height, target }),
     );
     console.log(blocks.join("\n\n"));
 
