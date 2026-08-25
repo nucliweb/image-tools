@@ -39,6 +39,7 @@ Options:
 | `-c, --codecs <list>` | all | Comma-separated subset of `jxl,avif,webp,jpegli,mozjpeg,heic` |
 | `--tolerance <n>` | `0.5` | Stop searching once within this of the target |
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
+| `--time-runs <n>` | `1` | Time each codec's encode n times and report the median |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
 | `--html-max-dim <n>` | `1600` | Downscale embedded report images above this size |
@@ -93,6 +94,14 @@ An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 `cpu / encode ≈ 4` means it kept about four cores busy. Both are measured with
 `/usr/bin/time` (the `time` package, present in the Docker image); where it is not
 available they show `n/a`. The CSV adds `encode_wall_ms` and `encode_cpu_ms`.
+
+Timing is a **single encode** at the target by default, which is noisy. Pass
+`--time-runs <n>` to encode n times and report the **median** of the wall and CPU
+times, which smooths the run-to-run variation at the cost of n encodes per codec:
+
+```bash
+compare-codecs reference.png --target 90 --time-runs 5
+```
 
 Unlike the size and quality figures, timing is **not deterministic**: it depends on
 the machine, its load, and the tool versions and build flags. CPU time is the
