@@ -32,7 +32,12 @@ Options:
       --keep                Keep the temporary work directory
   -h, --help                Show this help
 
-The reference must be a PNG in sRGB.`;
+The reference must be a PNG in sRGB.
+
+In the results, the iters column is the number of binary-search steps taken to
+reach the equal-quality setting (each at a different quality), not timing
+repetitions. The encode/cpu columns time a single encode at that setting; use
+--time-runs to repeat it and report the median.`;
 
 function parse() {
   const { values, positionals } = parseArgs({

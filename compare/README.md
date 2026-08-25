@@ -89,6 +89,10 @@ An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 +---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
 ```
 
+`iters` is the number of binary-search steps taken to reach the equal-quality
+setting, each at a different quality; it is **not** a count of timing repetitions.
+The timing columns cover a single encode at the found setting (see `--time-runs`).
+
 `encode` is the wall-clock time of the single encode at the target quality, and
 `cpu` its CPU time (user + sys). Their ratio shows how much the codec parallelized:
 `cpu / encode ≈ 4` means it kept about four cores busy. Both are measured with
