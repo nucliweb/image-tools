@@ -79,14 +79,14 @@ sample images).
 An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 
 ```
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
-| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
-| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |  60 ms | 240 ms |
-| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |  48 ms | 120 ms |
-| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |  50 ms | 150 ms |
-| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |  22 ms |  22 ms |
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
+| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu | enc total | cpu total |
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
+| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |  60 ms | 240 ms |    460 ms |    1.86 s |
+| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |  48 ms | 120 ms |    390 ms |    980 ms |
+| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |  50 ms | 150 ms |    280 ms |    840 ms |
+| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |  22 ms |  22 ms |    130 ms |    130 ms |
++---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
 ```
 
 `iters` is the number of binary-search steps taken to reach the equal-quality
@@ -98,6 +98,14 @@ The timing columns cover a single encode at the found setting (see `--time-runs`
 `cpu / encode ≈ 4` means it kept about four cores busy. Both are measured with
 `/usr/bin/time` (the `time` package, present in the Docker image); where it is not
 available they show `n/a`. The CSV adds `encode_wall_ms` and `encode_cpu_ms`.
+
+`enc total` and `cpu total` are the **total encode effort**: the encoder's wall and
+CPU time summed over every encode the search ran, plus the final one, i.e. what it
+cost the tool to land this codec on the target. This is **not** a fair speed ranking:
+it scales with `iters`, which depends on `--tolerance`, `--max-iterations`, and where
+the target falls in the codec's range. For codec speed compare `encode`/`cpu`; for
+how much work the run spent, compare the totals. The CSV adds `total_encode_wall_ms`
+and `total_encode_cpu_ms`.
 
 Timing is a **single encode** at the target by default, which is noisy. Pass
 `--time-runs <n>` to encode n times and report the **median** of the wall and CPU
