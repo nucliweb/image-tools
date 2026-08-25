@@ -1,0 +1,29 @@
+{
+  "target": 90,
+  "images": {
+    "kodim04.png": {
+      "JPEG XL": 120534,
+      "jpegli": 130656,
+      "HEIC": 141774,
+      "AVIF": 150014,
+      "WebP": 173748,
+      "mozjpeg": 201372
+    },
+    "kodim19.png": {
+      "JPEG XL": 136558,
+      "jpegli": 147032,
+      "AVIF": 148631,
+      "HEIC": 155171,
+      "WebP": 173918,
+      "mozjpeg": 213006
+    },
+    "kodim23.png": {
+      "JPEG XL": 74113,
+      "jpegli": 97039,
+      "AVIF": 111100,
+      "mozjpeg": 130349,
+      "WebP": 140374,
+      "HEIC": 157392
+    }
+  }
+}

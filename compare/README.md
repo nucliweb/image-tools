@@ -141,6 +141,23 @@ deliberate, comparable operating point:
 compare-codecs reference.png --target 90 --effort 9 --time-runs 3
 ```
 
+## Size-regression gate
+
+CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) versus
+a committed baseline (`demos/baseline.json`), so a change that quietly makes a codec's
+output larger is caught. Only size is checked, it is deterministic given the pinned
+codec versions in the image; timing is never gated. The check runs on pull requests
+that can change codec output (the `Dockerfile`, the comparison sources, or the
+baseline), and on `main`.
+
+When a change moves sizes on purpose (a codec version bump, a knob change), regenerate
+the baseline and commit it:
+
+```bash
+compare-codecs demos/images --target 90 --csv results.csv
+node bin/check-regression.js demos/baseline.json results.csv --update
+```
+
 ## How it works
 
 Each codec exposes one quality knob that is monotonic against perceptual score:

@@ -1,0 +1,64 @@
+name: Size regression gate
+
+# Fails when a codec's bytes-at-equal-quality grow beyond tolerance versus the
+# committed baseline (compare/demos/baseline.json). Size is deterministic given the
+# pinned codec versions in the image; timing is never checked. Runs on the PRs that
+# can change codec output (Dockerfile, comparison sources, the baseline itself),
+# plus main and on demand. Regenerate the baseline after a deliberate change with:
+#   compare-codecs compare/demos/images --target 90 --csv results.csv
+#   node compare/bin/check-regression.js compare/demos/baseline.json results.csv --update
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "compare/src/**"
+      - "compare/bin/**"
+      - "compare/demos/baseline.json"
+      - ".github/workflows/regression.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Check for size regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: image-tools:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Fetch demo images
+        run: bash compare/demos/fetch.sh
+
+      - name: Compare and check for regressions
+        run: |
+          # The comparison runs at the same target the baseline was generated with.
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
+            "compare-codecs compare/demos/images --target 90 --csv results.csv"
+          # Capture the check's status so the summary is written even on failure.
+          STATUS=0
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
+            "node compare/bin/check-regression.js compare/demos/baseline.json results.csv --tolerance 0.02" \
+            > regression.txt 2>&1 || STATUS=$?
+          cat regression.txt
+          {
+            echo "## Size regression check"
+            echo ""
+            echo '```'
+            cat regression.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $STATUS
