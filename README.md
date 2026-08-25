@@ -62,7 +62,7 @@ compare-codecs <image-or-dir...> [options]
 Each argument is a PNG file or a directory of PNGs. Examples:
 
 ```bash
-# One image: a Markdown table sorted by size (smallest wins)
+# One image: an ASCII table sorted by size (smallest wins)
 compare-codecs photo.png --target 90
 
 # A whole folder: per-image tables plus a batch summary (avg bpp, wins, savings)
