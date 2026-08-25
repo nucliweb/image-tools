@@ -8,6 +8,7 @@
  */
 
 const round2 = (n) => Number(n.toFixed(2));
+const clampInt = (n, lo, hi) => Math.max(lo, Math.min(hi, Math.round(n)));
 
 export const CODECS = {
   jxl: {
@@ -21,6 +22,9 @@ export const CODECS = {
     label: (knob) => `-d ${round2(knob)}`,
     encodeArgs: (input, output, knob) => [input, output, "-d", String(round2(knob))],
     decodeArgs: (input, outputPng) => [input, outputPng],
+    // cjxl -e is 1..10 (higher = more effort); options follow the positionals.
+    effortPlacement: "post",
+    effortArgs: (level) => ["-e", String(clampInt(level, 1, 10))],
   },
 
   jpegli: {
@@ -53,6 +57,9 @@ export const CODECS = {
       return ["--min", q, "--max", q, input, output];
     },
     decodeArgs: (input, outputPng) => [input, outputPng],
+    // avifenc -s is 0..10 but inverted (0 = slowest), so more effort = lower speed.
+    effortPlacement: "pre",
+    effortArgs: (level) => ["-s", String(clampInt(10 - level, 0, 10))],
   },
 
   webp: {
@@ -66,6 +73,9 @@ export const CODECS = {
     label: (knob) => `-q ${Math.round(knob)}`,
     encodeArgs: (input, output, knob) => ["-q", String(Math.round(knob)), input, "-o", output],
     decodeArgs: (input, outputPng) => [input, "-o", outputPng],
+    // cwebp -m is the 0..6 compression method (higher = slower); options lead.
+    effortPlacement: "pre",
+    effortArgs: (level) => ["-m", String(clampInt((level * 6) / 10, 0, 6))],
   },
 
   mozjpeg: {
@@ -104,3 +114,21 @@ export const CODECS = {
 };
 
 export const DEFAULT_CODECS = ["jxl", "avif", "webp", "jpegli", "mozjpeg", "heic"];
+
+/** Codecs that expose an effort/speed knob, so --effort applies to them. */
+export const EFFORT_CODECS = Object.values(CODECS)
+  .filter((c) => c.effortArgs)
+  .map((c) => c.name);
+
+/**
+ * Build the encoder argument list for a knob, optionally injecting a normalized
+ * effort level (0..10, higher = more effort). Codecs without an effort knob ignore
+ * it; the extra args go before or after the base args per the codec's placement,
+ * since some tools take options before the positional paths and others after.
+ */
+export function buildEncodeArgs(codec, input, output, knob, effort) {
+  const base = codec.encodeArgs(input, output, knob);
+  if (effort === null || effort === undefined || !codec.effortArgs) return base;
+  const extra = codec.effortArgs(effort);
+  return codec.effortPlacement === "post" ? [...base, ...extra] : [...extra, ...base];
+}

@@ -7,9 +7,9 @@ import { dssim } from "./metrics.js";
  * ascending ssimulacra2. Each point keeps the decoded PNG path so a preview can
  * be embedded later.
  */
-export function sweepCodec(codec, refNorm, pixels, workdir) {
+export function sweepCodec(codec, refNorm, pixels, workdir, effort = null) {
   const points = codec.sweep.map((knob, i) => {
-    const m = encodeDecodeMeasure(codec, refNorm, knob, workdir, `.s${i}`);
+    const m = encodeDecodeMeasure(codec, refNorm, knob, workdir, `.s${i}`, effort);
     return {
       knob,
       label: codec.label(knob),
