@@ -66,7 +66,7 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, eff
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
  * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations, reached,
- *   encodeWallMs, encodeCpuMs, totalEncodeWallMs, totalEncodeCpuMs }}
+ *   decodedPng, encodeWallMs, encodeCpuMs, totalEncodeWallMs, totalEncodeCpuMs }}
  */
 export function findQualityForTarget(codec, referencePng, target, workdir, opts = {}) {
   // Normalize the reference once: strip ancillary chunks so ssimulacra2/dssim can
@@ -128,6 +128,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     bpp: (final.bytes * 8) / pixels,
     iterations: search.iterations,
     reached: Math.abs(final.score - target) <= tolerance,
+    decodedPng: final.decodedPng,
     encodeWallMs: timing.wallMs,
     encodeCpuMs: timing.cpuMs,
     totalEncodeWallMs: timingComplete ? totalWallMs : null,
