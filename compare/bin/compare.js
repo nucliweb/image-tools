@@ -4,11 +4,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
-import { findQualityForTarget, medianEncodeTiming } from "../src/pipeline.js";
+import { findQualityForTarget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
 import { run, resolveCommand } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
-import { sweepCodec, nearestPoint } from "../src/sweep.js";
+import { sweepCodec } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
 import { toComparisonTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
 
@@ -133,22 +133,27 @@ function main() {
           const codec = CODECS[id];
           process.stderr.write(`  ~ ${codec.name} sweep …\n`);
           const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
-          const prev = nearestPoint(points, target);
-          // With more than one timing run, re-time the preview point and report the
-          // median; a single run reuses the sweep's own timing sample.
-          const timing =
-            timeRuns > 1
-              ? medianEncodeTiming(codec, refNorm, prev.knob, workdir, timeRuns, effort)
-              : { wallMs: prev.encodeWallMs, cpuMs: prev.encodeCpuMs };
+          // The preview is the true equal-quality operating point (same binary search
+          // as the table), so its label/size match the table and every codec's preview
+          // sits at the target rather than the nearest coarse sweep point.
+          const op = findQualityForTarget(codec, image, target, workdir, {
+            referenceNorm: refNorm,
+            effort,
+            timeRuns,
+          });
           return {
             id,
             name: codec.name,
             points,
             preview: {
-              ...prev,
-              dataUri: embed(prev.decodedPng, dims),
-              encodeWallMs: timing.wallMs,
-              encodeCpuMs: timing.cpuMs,
+              ssimulacra2: op.ssimulacra2,
+              bpp: op.bpp,
+              bytes: op.bytes,
+              dssim: op.dssim,
+              label: op.label,
+              dataUri: embed(op.decodedPng, dims),
+              encodeWallMs: op.encodeWallMs,
+              encodeCpuMs: op.encodeCpuMs,
             },
           };
         });

@@ -55,6 +55,7 @@ you explore the trade-off interactively:
 - a **before/after wipe** between the original and each codec at the target quality,
 - **zoom and pan** to inspect artifacts, kept in place while you toggle formats,
 - a **format toggle** with live size / bpp / ssimulacra2 / dssim,
+- a **difference view** with an amplify slider, an in-browser map of where the selected codec departs from the original,
 - a **plain-language takeaway** and, for a batch, an **across-all-images** summary,
 - a **rate–distortion chart** (bpp vs ssimulacra2) with one curve per codec,
 - a **quality slider** that reads each codec's size at any quality level.
@@ -62,6 +63,16 @@ you explore the trade-off interactively:
 ```bash
 compare-codecs demos/images --target 90 --html report.html
 ```
+
+The **difference view** shows, per pixel, `|original − codec|` multiplied by the
+amplify factor (1 to 30). It is a display gain, not a metric: at the equal-quality
+target the real differences are tiny, so at ×1 the map is nearly black; raising
+amplify scales those small values into a visible range so you can see *where* each
+codec spends its error. A pixel that is identical stays black at any amplify, and the
+map is per-channel, so a color tint points to chroma (color) error and neutral gray to
+luma (brightness) error. An amplified, busy map is not a sign of low quality, it just
+makes the small, expected differences visible; compare formats at the same amplify for
+a fair look.
 
 The report embeds the decoded previews at full resolution so the zoom stays sharp,
 which makes large batches heavy. `--html-max-dim <n>` downscales embedded images
