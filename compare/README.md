@@ -148,7 +148,8 @@ a committed baseline (`demos/baseline.json`), so a change that quietly makes a c
 output larger is caught. Only size is checked, it is deterministic given the pinned
 codec versions in the image; timing is never gated. The check runs on pull requests
 that can change codec output (the `Dockerfile`, the comparison sources, or the
-baseline), and on `main`.
+baseline), and on `main`. On a pull request it also uploads the HTML report and posts
+a sticky comment linking it (a download; open `report.html` locally).
 
 When a change moves sizes on purpose (a codec version bump, a knob change), regenerate
 the baseline and commit it:

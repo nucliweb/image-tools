@@ -2,8 +2,9 @@ name: Size regression gate
 
 # Fails when a codec's bytes-at-equal-quality grow beyond tolerance versus the
 # committed baseline (compare/demos/baseline.json). Size is deterministic given the
-# pinned codec versions in the image; timing is never checked. Runs on the PRs that
-# can change codec output (Dockerfile, comparison sources, the baseline itself),
+# pinned codec versions in the image; timing is never checked. On pull requests it
+# also uploads the HTML report and posts a sticky comment linking it. Runs on the
+# PRs that can change codec output (Dockerfile, comparison sources, the baseline),
 # plus main and on demand. Regenerate the baseline after a deliberate change with:
 #   compare-codecs compare/demos/images --target 90 --csv results.csv
 #   node compare/bin/check-regression.js compare/demos/baseline.json results.csv --update
@@ -21,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   regression:
@@ -43,12 +45,18 @@ jobs:
       - name: Fetch demo images
         run: bash compare/demos/fetch.sh
 
-      - name: Compare and check for regressions
+      - name: Compare and generate the report
         run: |
           # The comparison runs at the same target the baseline was generated with.
+          # The table + CSV come from the search; the HTML is a separate sweep mode.
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
             "compare-codecs compare/demos/images --target 90 --csv results.csv"
-          # Capture the check's status so the summary is written even on failure.
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
+            "compare-codecs compare/demos/images --target 90 --html report.html"
+
+      - name: Check for size regressions
+        id: check
+        run: |
           STATUS=0
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
             "node compare/bin/check-regression.js compare/demos/baseline.json results.csv --tolerance 0.02" \
@@ -61,4 +69,59 @@ jobs:
             cat regression.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit $STATUS
+          [ "$STATUS" -eq 0 ] && echo "failed=false" >> "$GITHUB_OUTPUT" || echo "failed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload report and CSV
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codec-comparison
+          path: |
+            report.html
+            results.csv
+
+      - name: Comment the report link on the PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        env:
+          FAILED: ${{ steps.check.outputs.failed }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            const failed = process.env.FAILED === 'true';
+            const url = process.env.ARTIFACT_URL;
+            let table = '';
+            try { table = fs.readFileSync('regression.txt', 'utf8').trim(); } catch {}
+            const marker = '<!-- codec-comparison-report -->';
+            const body = [
+              marker,
+              '### Codec comparison ' + (failed ? '❌ size regression' : '✅ no size regression'),
+              '',
+              '📥 **[Download the codec report](' + url + ')** (unzip and open `report.html` locally).',
+              '',
+              '<details><summary>Size check</summary>',
+              '',
+              '```',
+              table,
+              '```',
+              '</details>',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail on regression
+        if: always()
+        run: |
+          if [ "${{ steps.check.outputs.failed }}" = "true" ]; then
+            echo "Size regression detected; see the job summary and PR comment."
+            exit 1
+          fi
