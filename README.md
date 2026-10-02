@@ -121,10 +121,10 @@ cd compare && node --test test/integration.test.js
 
 Two more workflows run `compare-codecs` on the demo images inside the built image:
 
-- **Size-regression gate** ([`.github/workflows/regression.yml`](.github/workflows/regression.yml)) fails when a codec's bytes at equal quality grow more than 2% over the committed baseline (`compare/demos/baseline.json`). It runs on pull requests that can change codec output, on `main`, and on demand. On a pull request it also posts a sticky comment with the size check and a link to download the HTML report. See [`compare/README.md`](compare/README.md#size-regression-gate) for how to regenerate the baseline after a deliberate change.
+- **Size-regression gate** ([`.github/workflows/regression.yml`](.github/workflows/regression.yml)) fails when a codec's bytes at equal quality grow more than 2% over the committed baseline (`compare/demos/baseline.json`), or its achieved ssimulacra2 score drops more than 0.5 points, or the run's target differs from the baseline's. It runs on pull requests that can change codec output, on `main`, and on demand. On a pull request it also posts a sticky comment with the size check and a link to download the HTML report. See [`compare/README.md`](compare/README.md#size-regression-gate) for how to regenerate the baseline after a deliberate change.
 - **Codec comparison** ([`.github/workflows/comparison.yml`](.github/workflows/comparison.yml)) runs weekly and on demand (with a configurable target and effort), writes the results table to the job summary, and uploads the HTML report and CSV as artifacts. It reports only; it never fails the build.
 
-Only file size is gated: it is deterministic given the pinned codec versions in the image. Timing depends on the runner and is informational.
+Only file size and achieved quality are gated: both are deterministic given the pinned codec versions in the image. Timing depends on the runner and is informational.
 
 ## Repository layout
 

@@ -14,12 +14,6 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 - **More codecs.** Extend beyond the current six as encoders mature or new ones become relevant. Low effort per codec, since the equal-quality search already generalises across quality knobs.
 - **More demo material.** Broaden the sample set (currently three Kodak images) with more images and content types, so the demo report shows how codec winners change with the subject.
 
-### Size-regression gate
-
-- **Check the target.** The baseline records the target it was generated at, but the check does not compare it with the run's target, so a changed target in the workflow would compare unrelated numbers without warning.
-- **Check quality, not only size.** The gate compares bytes only. Recording the achieved ssimulacra2 score in the baseline would flag a change that lands smaller only because it settled at a lower quality within the search tolerance.
-- **Robust CSV parsing.** The results parser splits on commas, so an image name containing a comma breaks it.
-
 ### Documentation
 
 - **Public learnings document.** A public, English write-up of the technical gotchas found while building the toolbox (static linking, version-specific encoder flags, PNG chunk handling for the metrics, and similar). Decide whether to publish it and in what form.

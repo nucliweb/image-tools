@@ -158,18 +158,27 @@ compare-codecs reference.png --target 90 --effort 9 --time-runs 3
 
 CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) versus
 a committed baseline (`demos/baseline.json`), so a change that quietly makes a codec's
-output larger is caught. Only size is checked, it is deterministic given the pinned
-codec versions in the image; timing is never gated. The check runs on pull requests
-that can change codec output (the `Dockerfile`, the comparison sources, or the
-baseline), and on `main`. On a pull request it also uploads the HTML report and posts
-a sticky comment linking it (a download; open `report.html` locally).
+output larger is caught. The baseline also records each codec's achieved ssimulacra2
+score, and a drop of more than 0.5 points fails too, so a file cannot pass as smaller
+by settling at a lower quality. Both are deterministic given the pinned codec versions
+in the image; timing is never gated.
 
-When a change moves sizes on purpose (a codec version bump, a knob change), regenerate
-the baseline and commit it:
+The check also fails, without comparing anything, when the run's target differs from
+the one the baseline was generated at. The workflow defines the target once and passes
+it to both the comparison and the check.
+
+The check runs on pull requests that can change codec output (the `Dockerfile`, the
+comparison sources, or the baseline), and on `main`. On a pull request it also uploads
+the HTML report and posts a sticky comment linking it (a download; open `report.html`
+locally), with the date the artifact expires.
+
+When a change moves sizes or scores on purpose (a codec version bump, a knob change),
+regenerate the baseline and commit it. Generate it from the CI run's `results.csv`
+(in the pull request's report artifact) rather than a local run: CI runs on amd64,
+and sizes differ slightly between architectures.
 
 ```bash
-compare-codecs demos/images --target 90 --csv results.csv
-node bin/check-regression.js demos/baseline.json results.csv --update
+node bin/check-regression.js demos/baseline.json results.csv --update --target 90
 ```
 
 ## How it works

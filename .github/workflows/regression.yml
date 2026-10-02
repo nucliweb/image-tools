@@ -1,13 +1,14 @@
 name: Size regression gate
 
-# Fails when a codec's bytes-at-equal-quality grow beyond tolerance versus the
-# committed baseline (compare/demos/baseline.json). Size is deterministic given the
-# pinned codec versions in the image; timing is never checked. On pull requests it
+# Fails when a codec's bytes-at-equal-quality grow beyond tolerance, or its achieved
+# ssimulacra2 score drops beyond tolerance, versus the committed baseline
+# (compare/demos/baseline.json). Both are deterministic given the pinned codec
+# versions in the image; timing is never checked. On pull requests it
 # also uploads the HTML report and posts a sticky comment linking it. Runs on the
 # PRs that can change codec output (Dockerfile, comparison sources, the baseline),
 # plus main and on demand. Regenerate the baseline after a deliberate change with:
-#   compare-codecs compare/demos/images --target 90 --csv results.csv
-#   node compare/bin/check-regression.js compare/demos/baseline.json results.csv --update
+#   (download results.csv from this workflow's artifact; CI runs on amd64)
+#   node compare/bin/check-regression.js compare/demos/baseline.json results.csv --update --target 90
 on:
   pull_request:
     paths:
@@ -24,6 +25,11 @@ permissions:
   contents: read
   actions: read
   pull-requests: write
+
+env:
+  # The comparison and the check share one target; the checker also fails if it
+  # differs from the target the baseline was generated at.
+  TARGET: "90"
 
 jobs:
   regression:
@@ -48,21 +54,20 @@ jobs:
 
       - name: Compare and generate the report
         run: |
-          # The comparison runs at the same target the baseline was generated with.
           # One run writes both the CSV the check reads and the HTML report.
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "compare-codecs compare/demos/images --target 90 --csv results.csv --html report.html"
+            "compare-codecs compare/demos/images --target $TARGET --csv results.csv --html report.html"
 
       - name: Check for size regressions
         id: check
         run: |
           STATUS=0
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "node compare/bin/check-regression.js compare/demos/baseline.json results.csv --tolerance 0.02" \
+            "node compare/bin/check-regression.js compare/demos/baseline.json results.csv --target $TARGET --tolerance 0.02 --quality-tolerance 0.5" \
             > regression.txt 2>&1 || STATUS=$?
           cat regression.txt
           {
-            echo "## Size regression check"
+            echo "## Size and quality regression check"
             echo ""
             echo '```'
             cat regression.txt
@@ -110,7 +115,7 @@ jobs:
             const marker = '<!-- codec-comparison-report -->';
             const body = [
               marker,
-              '### Codec comparison ' + (failed ? '❌ size regression' : '✅ no size regression'),
+              '### Codec comparison ' + (failed ? '❌ regression' : '✅ no size or quality regression'),
               '',
               '📥 **[Download the codec report](' + url + ')** (unzip and open `report.html` locally).' + availability,
               '',
@@ -134,6 +139,6 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.check.outputs.failed }}" = "true" ]; then
-            echo "Size regression detected; see the job summary and PR comment."
+            echo "Size or quality regression detected; see the job summary and PR comment."
             exit 1
           fi
