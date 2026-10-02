@@ -15,13 +15,13 @@ Comparing codecs at their own quality scales is misleading, because those scales
 
 ## Quick start (Docker)
 
-The Docker image is the reproducible way to get every tool at a known version.
+The Docker image is the reproducible way to get every tool at a known version. A prebuilt multi-arch image (amd64 and arm64, so it runs natively on Apple Silicon) is published to the GitHub Container Registry from `main`:
 
 ```bash
-docker build -t image-tools .
+docker pull ghcr.io/nucliweb/image-tools
 
 # Drop into a shell with every tool on PATH, with the current folder mounted:
-docker run --rm -it -v "$PWD:/work" image-tools
+docker run --rm -it -v "$PWD:/work" ghcr.io/nucliweb/image-tools
 ```
 
 Inside the container:
@@ -33,8 +33,12 @@ compare-codecs my-image.png --target 90 --html report.html
 The entrypoint is `bash`. To run a single command from the host without an interactive shell, override the entrypoint:
 
 ```bash
-docker run --rm -v "$PWD:/work" --entrypoint bash image-tools -c 'compare-codecs /work/photo.png --target 90'
+docker run --rm -v "$PWD:/work" --entrypoint bash ghcr.io/nucliweb/image-tools -c 'compare-codecs /work/photo.png --target 90'
 ```
+
+`latest` follows `main`. Every published build is also tagged `sha-<short commit>`, so a comparison can cite the exact image it ran on and be reproduced later. Sizes at equal quality can differ slightly between amd64 and arm64 (encoders take different SIMD paths), so compare numbers produced on the same architecture.
+
+To build the image yourself instead, see [Building and verifying the image](#building-and-verifying-the-image).
 
 ## Native use
 
@@ -111,7 +115,7 @@ cd compare && node --test test/integration.test.js
 
 - **Unit tests** run on every push and pull request via [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on the current Node LTS. That runner has no codecs, so the integration tests skip there.
 - **Integration tests** exercise the full pipeline against the actual codecs and self-generated images; they skip cleanly where the codecs are not installed.
-- **Image E2E** ([`.github/workflows/image.yml`](.github/workflows/image.yml), on `main` and on demand) builds the Docker image, runs the test suite inside it (where the integration tests do run), and finishes with `smoke-test.sh`, so a green run proves every bundled tool works end to end.
+- **Image E2E** ([`.github/workflows/image.yml`](.github/workflows/image.yml), on `main` and on demand) builds the Docker image for amd64 and arm64, each on its own native runner, runs the test suite inside it (where the integration tests do run), and finishes with `smoke-test.sh`, so a green run proves every bundled tool works end to end on both architectures. On `main`, only an image that passes is published to GHCR.
 
 ## Continuous comparison
 

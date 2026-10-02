@@ -1,17 +1,41 @@
 name: Image E2E
 
 # Heavy end-to-end job: builds the Docker image (which compiles codecs from
-# source) and runs the integration tests and smoke test inside it. It does not
-# run on every pull request; only on pushes to main and on demand.
+# source) for each architecture on its own native runner, and runs the
+# integration tests and smoke test inside it. On main, an image that passes is
+# pushed to GHCR by digest, and the publish job joins both architectures under
+# one multi-arch tag (`latest` and `sha-<short>`). It does not run on every pull
+# request; only on pushes to main and on demand.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  PUBLISH: ${{ github.ref == 'refs/heads/main' }}
+
 jobs:
   image:
-    name: Build image, run integration + smoke
-    runs-on: ubuntu-latest
+    name: Build image, run integration + smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            # The default scope, shared with the comparison and regression workflows.
+            cache-scope: buildkit
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            cache-scope: buildkit-arm64
     steps:
       - uses: actions/checkout@v5
 
@@ -23,11 +47,99 @@ jobs:
           context: .
           load: true
           tags: image-tools:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.cache-scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache-scope }}
 
       - name: Integration tests (inside the image)
         run: docker run --rm --entrypoint bash image-tools:ci -c "cd /opt/image-tools/compare && node --test"
 
       - name: Smoke test (inside the image)
         run: docker run --rm --entrypoint bash image-tools:ci -c "$(cat smoke-test.sh)"
+
+      - name: Image labels
+        if: env.PUBLISH == 'true'
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same build as above, served from the layer cache; pushed untagged so the
+      # publish job can join the architectures under one tag.
+      - name: Push by digest
+        if: env.PUBLISH == 'true'
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.cache-scope }}
+
+      - name: Export digest
+        if: env.PUBLISH == 'true'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish multi-arch image to GHCR
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create the multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          mapfile -t tags < <(jq -r '.tags[] | "-t", .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+
+      - name: Inspect
+        run: docker buildx imagetools inspect "${{ env.IMAGE }}:latest"
