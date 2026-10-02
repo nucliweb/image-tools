@@ -29,7 +29,11 @@ important deliverables**.
 
 - Anyone can reproduce a comparison with `docker build -t image-tools .` regardless of
   host OS.
-- Tool versions are pinned via build args (`LIBJXL_REF`, `ECT_REF`, …).
+- Tool versions are pinned via build args (`LIBJXL_REF`, `ECT_REF`, …): a release tag
+  where upstream publishes one, otherwise a commit, plus the Rust toolchain and crate
+  versions. Packages from Debian `apt` follow the release's point updates (security
+  fixes), so they are not frozen; the size-regression gate catches one that changes an
+  encoder's output.
 - The source-build stages are the maintenance cost; they are the parts most likely to
   need iteration when upstream changes.
 - A tool that is impractical to package (heavy dependency tree, no apt package) may be

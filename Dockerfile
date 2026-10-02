@@ -39,9 +39,12 @@ RUN git clone --depth 1 --branch ${LIBJXL_REF} https://github.com/libjxl/libjxl.
          build/tools/ssimulacra2 -t /out/bin/
 
 # --- jpegli: cjpegli / djpegli (moved out of libjxl into google/jpegli) -------
-ARG JPEGLI_REF=main
-RUN git clone --depth 1 --branch ${JPEGLI_REF} https://github.com/google/jpegli.git \
-    && cd jpegli \
+# jpegli, flip and butteraugli publish no release tags, so they are pinned to a
+# commit. `git clone --branch` only takes a branch or tag, hence init + fetch.
+ARG JPEGLI_REF=031a0077f5799a6041004267fc12b956c1f52a20
+RUN git init -q jpegli && cd jpegli \
+    && git fetch -q --depth 1 https://github.com/google/jpegli.git ${JPEGLI_REF} \
+    && git checkout -q FETCH_HEAD \
     && git submodule update --init --depth 1 \
          third_party/skcms third_party/sjpeg third_party/libjpeg-turbo third_party/highway \
     && cmake -B build -G Ninja \
@@ -62,16 +65,19 @@ RUN git clone --depth 1 --branch ${ECT_REF} --recursive \
     && install -Dm755 ect/build/ect -t /out/bin/
 
 # --- flip: NVIDIA perceptual image diff (CPU build; optional/heavy) -----------
-ARG FLIP_REF=main
-RUN git clone --depth 1 --branch ${FLIP_REF} https://github.com/NVlabs/flip.git flip \
+ARG FLIP_REF=b475eb4bf394ab877c42166c9eb0a84a02cc5b14
+RUN git init -q flip \
+    && git -C flip fetch -q --depth 1 https://github.com/NVlabs/flip.git ${FLIP_REF} \
+    && git -C flip checkout -q FETCH_HEAD \
     && cmake -S flip/src -B flip/build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build flip/build \
     && install -Dm755 flip/build/flip -t /out/bin/
 
 # --- butteraugli: standalone (redundant with ssimulacra2, included on request)-
-ARG BUTTERAUGLI_REF=master
-RUN git clone --depth 1 --branch ${BUTTERAUGLI_REF} \
-      https://github.com/google/butteraugli.git \
+ARG BUTTERAUGLI_REF=71b18b636b9c7d1ae0c1d3730b85b3c127eb4511
+RUN git init -q butteraugli \
+    && git -C butteraugli fetch -q --depth 1 https://github.com/google/butteraugli.git ${BUTTERAUGLI_REF} \
+    && git -C butteraugli checkout -q FETCH_HEAD \
     && cd butteraugli/butteraugli \
     && g++ -O3 -std=c++11 -I.. butteraugli.cc butteraugli_main.cc \
          -o /out/bin/butteraugli -lpng -ljpeg \
@@ -90,11 +96,15 @@ RUN git clone --depth 1 --branch ${MOZJPEG_REF} https://github.com/mozilla/mozjp
 
 # --- rust tools: dssim + oxipng ----------------------------------------------
 # Debian's packaged rustc trails the minimum versions that current dssim/oxipng
-# releases require, so install a modern stable toolchain via rustup.
+# releases require, so install a pinned toolchain via rustup. --locked builds with
+# each crate's own Cargo.lock, so dependency versions are pinned too.
+ARG RUST_TOOLCHAIN=1.99.0
+ARG DSSIM_VERSION=3.5.1
+ARG OXIPNG_VERSION=10.2.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-      | sh -s -- -y --profile minimal \
+      | sh -s -- -y --profile minimal --default-toolchain ${RUST_TOOLCHAIN} \
     && . "$HOME/.cargo/env" \
-    && cargo install dssim oxipng --root /out
+    && cargo install --locked dssim@${DSSIM_VERSION} oxipng@${OXIPNG_VERSION} --root /out
 
 
 # =============================================================================
