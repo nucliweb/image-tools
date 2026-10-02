@@ -4,7 +4,7 @@ This is a lightweight list of ideas under consideration. Nothing here is committ
 
 ## Status
 
-The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF, WebP, jpegli, mozjpeg, HEIC) with equal-quality search, batch mode, CSV output, and a self-contained interactive HTML report. All three test layers (unit, gated integration, and the image E2E build) run in CI.
+The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF, WebP, jpegli, mozjpeg, HEIC) with equal-quality search, batch mode, CSV output, per-codec encode timing, matched encoder effort (`--effort`), and a self-contained interactive HTML report with a difference view and a rate–distortion chart. All three test layers (unit, gated integration, and the image E2E build) run in CI, alongside a size-regression gate against a committed baseline that comments on pull requests, and a weekly comparison report on the demo images.
 
 ## Ideas
 
@@ -13,6 +13,18 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 - **Rate-distortion analysis mode.** A dedicated rate-distortion output, curves of size versus quality across a range of targets, beyond the single chart embedded in the HTML report. This is the highest-value idea: it turns the tool from a point comparison at one quality into a full RD picture per codec.
 - **More codecs.** Extend beyond the current six as encoders mature or new ones become relevant. Low effort per codec, since the equal-quality search already generalises across quality knobs.
 - **More demo material.** Broaden the sample set (currently three Kodak images) with more images and content types, so the demo report shows how codec winners change with the subject.
+- **CSV and HTML from one run.** The table and CSV come from the search, and the HTML report from a separate sweep, so CI invokes `compare-codecs` twice on the same images. Producing both outputs from a single invocation would halve that cost and simplify the workflows.
+
+### Environment
+
+- **Newer base image.** The image is built on Debian bookworm, whose packaged encoders (avifenc 0.11, libheif, libwebp) lag well behind upstream. Moving to Debian trixie, or building those encoders from source like the others, keeps the comparison relevant to what people ship today. The size-regression gate makes the resulting shift in sizes visible, and the baseline is regenerated in the same change.
+- **Published image.** Publish the image to the GitHub Container Registry so users can `docker pull` it instead of building every codec from source.
+
+### Size-regression gate
+
+- **Check the target.** The baseline records the target it was generated at, but the check does not compare it with the run's target, so a changed target in the workflow would compare unrelated numbers without warning.
+- **Check quality, not only size.** The gate compares bytes only. Recording the achieved ssimulacra2 score in the baseline would flag a change that lands smaller only because it settled at a lower quality within the search tolerance.
+- **Robust CSV parsing.** The results parser splits on commas, so an image name containing a comma breaks it.
 
 ### Documentation
 
