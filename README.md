@@ -72,7 +72,7 @@ compare-codecs photo.png --target 90
 # A whole folder: per-image tables plus a batch summary (avg bpp, wins, savings)
 compare-codecs images/ --target 90 --csv results.csv
 
-# Interactive report: wipe, format toggle, rate–distortion chart, quality slider
+# Interactive report: wipe, format toggle, difference view, rate–distortion chart, quality slider
 compare-codecs images/ --target 90 --html report.html
 ```
 
@@ -109,9 +109,18 @@ cd compare && node --test
 cd compare && node --test test/integration.test.js
 ```
 
-- **Unit tests** run on every push and pull request via [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on the current Node LTS.
+- **Unit tests** run on every push and pull request via [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on the current Node LTS. That runner has no codecs, so the integration tests skip there.
 - **Integration tests** exercise the full pipeline against the actual codecs and self-generated images; they skip cleanly where the codecs are not installed.
-- **Image E2E** ([`.github/workflows/image.yml`](.github/workflows/image.yml), on `main` and on demand) builds the Docker image, runs the test suite inside it, and finishes with `smoke-test.sh`, so a green run proves every bundled tool works end to end.
+- **Image E2E** ([`.github/workflows/image.yml`](.github/workflows/image.yml), on `main` and on demand) builds the Docker image, runs the test suite inside it (where the integration tests do run), and finishes with `smoke-test.sh`, so a green run proves every bundled tool works end to end.
+
+## Continuous comparison
+
+Two more workflows run `compare-codecs` on the demo images inside the built image:
+
+- **Size-regression gate** ([`.github/workflows/regression.yml`](.github/workflows/regression.yml)) fails when a codec's bytes at equal quality grow more than 2% over the committed baseline (`compare/demos/baseline.json`). It runs on pull requests that can change codec output, on `main`, and on demand. On a pull request it also posts a sticky comment with the size check and a link to download the HTML report. See [`compare/README.md`](compare/README.md#size-regression-gate) for how to regenerate the baseline after a deliberate change.
+- **Codec comparison** ([`.github/workflows/comparison.yml`](.github/workflows/comparison.yml)) runs weekly and on demand (with a configurable target and effort), writes the results table to the job summary, and uploads the HTML report and CSV as artifacts. It reports only; it never fails the build.
+
+Only file size is gated: it is deterministic given the pinned codec versions in the image. Timing depends on the runner and is informational.
 
 ## Repository layout
 
@@ -122,7 +131,8 @@ cd compare && node --test test/integration.test.js
 | `smoke-test.sh` | Runtime verification of the toolbox |
 | `INVENTORY.md` | Full inventory of the bundled tools |
 | `decisions/` | Architecture decision records (ADRs) |
-| `.github/workflows/` | CI: unit + integration tests, and the image E2E build |
+| `compare/demos/baseline.json` | Committed sizes the regression gate checks against |
+| `.github/workflows/` | CI: unit tests, the image E2E build, the size-regression gate and the weekly comparison |
 | `ROADMAP.md` | Ideas under consideration |
 | `CONTRIBUTING.md` | Commit convention and workflow |
 
