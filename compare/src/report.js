@@ -110,6 +110,12 @@ export function toAggregateTable(rows, meta) {
   return [...heading, asciiTable(columns, body)].join("\n");
 }
 
+/** Quote a CSV field when it holds a comma, a quote or a newline (RFC 4180). */
+function csvField(value) {
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 /** Render batch results as CSV, one row per (image, codec). */
 export function toBatchCsv(perImage) {
   const head =
@@ -119,7 +125,7 @@ export function toBatchCsv(perImage) {
   for (const { image, results } of perImage) {
     for (const r of [...results].sort(bySizeAscending)) {
       lines.push(
-        `${image},${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
+        `${csvField(image)},${csvField(r.name)},${csvField(r.label)},${r.bytes},${r.bpp.toFixed(4)},` +
           `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.reached},${r.iterations},` +
           `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
           `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
@@ -137,7 +143,7 @@ export function toCsv(results) {
     "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms";
   const body = rows.map(
     (r) =>
-      `${r.name},${r.label},${r.bytes},${r.bpp.toFixed(4)},` +
+      `${csvField(r.name)},${csvField(r.label)},${r.bytes},${r.bpp.toFixed(4)},` +
       `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.iterations},` +
       `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
       `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
