@@ -142,4 +142,4 @@ Only file size is gated: it is deterministic given the pinned codec versions in 
 
 ## License
 
-MIT.
+MIT, see [`LICENSE`](LICENSE).
