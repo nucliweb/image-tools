@@ -8,7 +8,7 @@
 # Goal: one environment where every encoder/decoder and every quality metric
 # lives together, so codec comparisons are apples-to-apples.
 
-FROM debian:trixie-slim AS builder
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -108,7 +108,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 
 # =============================================================================
-FROM debian:trixie-slim AS runtime
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Bulk of the toolbox straight from apt (encoders, generalists, optimizers).
