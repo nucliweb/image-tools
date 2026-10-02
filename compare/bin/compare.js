@@ -102,80 +102,24 @@ function main() {
 
   const workdir = mkdtempSync(join(tmpdir(), "image-tools-"));
   try {
-    if (values.html) {
-      const maxDim = Number(values["html-max-dim"]);
-      // Embed a PNG as a data URI, downscaling it first (via vipsthumbnail) when
-      // its longest side exceeds maxDim, to keep the report small. Metrics are
-      // unaffected; only the embedded preview is resized.
-      let embedSeq = 0;
-      const embed = (pngPath, dims) => {
-        if (!(maxDim > 0) || Math.max(dims.width, dims.height) <= maxDim) {
-          return pngDataUri(pngPath);
-        }
-        const small = join(workdir, `embed${embedSeq++}.png`);
-        run(resolveCommand("vipsthumbnail"), [pngPath, "--size", String(maxDim), "-o", small]);
-        return pngDataUri(small);
-      };
-
-      const report = { target, images: [] };
-      images.forEach((image, idx) => {
-        const refNorm = join(workdir, `img${idx}.norm.png`);
-        let dims;
-        try {
-          writeStrippedPng(image, refNorm);
-          dims = pngDimensions(refNorm);
-        } catch {
-          process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
-          return;
-        }
-        process.stderr.write(`# ${basename(image)}\n`);
-        const codecs = ids.map((id) => {
-          const codec = CODECS[id];
-          process.stderr.write(`  ~ ${codec.name} sweep …\n`);
-          const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
-          // The preview is the true equal-quality operating point (same binary search
-          // as the table), so its label/size match the table and every codec's preview
-          // sits at the target rather than the nearest coarse sweep point.
-          const op = findQualityForTarget(codec, image, target, workdir, {
-            referenceNorm: refNorm,
-            effort,
-            timeRuns,
-          });
-          return {
-            id,
-            name: codec.name,
-            points,
-            preview: {
-              ssimulacra2: op.ssimulacra2,
-              bpp: op.bpp,
-              bytes: op.bytes,
-              dssim: op.dssim,
-              label: op.label,
-              dataUri: embed(op.decodedPng, dims),
-              encodeWallMs: op.encodeWallMs,
-              encodeCpuMs: op.encodeCpuMs,
-            },
-          };
-        });
-        report.images.push({
-          name: basename(image),
-          width: dims.width,
-          height: dims.height,
-          originalDataUri: embed(refNorm, dims),
-          codecs,
-        });
-      });
-
-      if (report.images.length === 0) {
-        console.error("No usable PNG images.");
-        process.exit(1);
+    // Embed a PNG as a data URI for the HTML report, downscaling it first (via
+    // vipsthumbnail) when its longest side exceeds maxDim, to keep the report small.
+    // Metrics are unaffected; only the embedded preview is resized.
+    const maxDim = Number(values["html-max-dim"]);
+    let embedSeq = 0;
+    const embed = (pngPath, dims) => {
+      if (!(maxDim > 0) || Math.max(dims.width, dims.height) <= maxDim) {
+        return pngDataUri(pngPath);
       }
-      writeFileSync(values.html, buildHtml(report));
-      process.stderr.write(`Wrote ${values.html}\n`);
-      return;
-    }
+      const small = join(workdir, `embed${embedSeq++}.png`);
+      run(resolveCommand("vipsthumbnail"), [pngPath, "--size", String(maxDim), "-o", small]);
+      return pngDataUri(small);
+    };
 
+    // One equal-quality search per image and codec feeds every output: the table,
+    // the CSV and the HTML report. The report adds a rate-distortion sweep per codec.
     const perImage = [];
+    const report = { target, images: [] };
     images.forEach((image, idx) => {
       const refNorm = join(workdir, `img${idx}.norm.png`);
       let dims;
@@ -188,18 +132,49 @@ function main() {
       }
 
       process.stderr.write(`# ${basename(image)}\n`);
-      const results = ids.map((id) => {
-        process.stderr.write(`  → ${CODECS[id].name} …\n`);
-        return findQualityForTarget(CODECS[id], image, target, workdir, {
+      const results = [];
+      const reportCodecs = [];
+      for (const id of ids) {
+        const codec = CODECS[id];
+        process.stderr.write(`  → ${codec.name} …\n`);
+        const op = findQualityForTarget(codec, image, target, workdir, {
           tolerance,
           maxIterations,
           timeRuns,
           effort,
           referenceNorm: refNorm,
         });
-      });
+        results.push(op);
+        if (!values.html) continue;
+
+        // Embed the decoded preview before the sweep reuses the work directory. The
+        // preview is the equal-quality operating point itself, so its label and size
+        // match the table rather than the nearest coarse sweep point.
+        const preview = {
+          ssimulacra2: op.ssimulacra2,
+          bpp: op.bpp,
+          bytes: op.bytes,
+          dssim: op.dssim,
+          label: op.label,
+          dataUri: embed(op.decodedPng, dims),
+          encodeWallMs: op.encodeWallMs,
+          encodeCpuMs: op.encodeCpuMs,
+        };
+        process.stderr.write(`  ~ ${codec.name} sweep …\n`);
+        const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
+        reportCodecs.push({ id, name: codec.name, points, preview });
+      }
 
       perImage.push({ image: basename(image), width: dims.width, height: dims.height, results });
+      if (values.html) {
+        report.images.push({
+          name: basename(image),
+          width: dims.width,
+          height: dims.height,
+          originalDataUri: embed(refNorm, dims),
+          codecs: reportCodecs,
+        });
+      }
     });
 
     if (perImage.length === 0) {
@@ -223,6 +198,11 @@ function main() {
       const csv = perImage.length > 1 ? toBatchCsv(perImage) : toCsv(perImage[0].results);
       writeFileSync(values.csv, `${csv}\n`);
       process.stderr.write(`Wrote ${values.csv}\n`);
+    }
+
+    if (values.html) {
+      writeFileSync(values.html, buildHtml(report));
+      process.stderr.write(`Wrote ${values.html}\n`);
     }
   } finally {
     if (!values.keep) rmSync(workdir, { recursive: true, force: true });

@@ -47,12 +47,9 @@ jobs:
           EFFORT="${{ github.event.inputs.effort || '' }}"
           BASE="compare-codecs compare/demos/images --target $TARGET"
           [ -n "$EFFORT" ] && BASE="$BASE --effort $EFFORT"
-          # The table (stdout) + CSV come from the search; the interactive HTML is a
-          # separate sweep-based mode, so it is a second invocation.
+          # One run prints the table and writes the CSV and the HTML report.
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "$BASE --csv results.csv" | tee comparison.txt
-          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "$BASE --html report.html"
+            "$BASE --csv results.csv --html report.html" | tee comparison.txt
           {
             echo "## Codec comparison — demo images (target ss2 $TARGET${EFFORT:+, effort $EFFORT})"
             echo ""

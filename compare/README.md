@@ -50,7 +50,9 @@ Options:
 
 `--html report.html` produces a single self-contained file (images embedded, no
 external assets) that sweeps each codec across a range of quality points and lets
-you explore the trade-off interactively:
+you explore the trade-off interactively. The table still prints and `--csv` still
+applies, so one run produces every output; the report's previews are the same
+equal-quality results as the table and the CSV:
 
 - a **before/after wipe** between the original and each codec at the target quality,
 - **zoom and pan** to inspect artifacts, kept in place while you toggle formats,
