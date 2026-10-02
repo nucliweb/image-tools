@@ -1,14 +1,14 @@
 # image-tools — reproducible image codec + quality toolbox
 #
-# STATUS: DRAFT — not yet built/verified (Docker daemon was down when authored).
-# Build & verify with:  docker build -t image-tools .
+# Build:   docker build -t image-tools .
+# Verify:  docker run --rm --entrypoint bash image-tools -c "$(cat smoke-test.sh)"
 # The source-build stages (libjxl, jpegli, ect, flip, butteraugli) are the
 # likely iteration points; apt/cargo stages are low risk.
 #
 # Goal: one environment where every encoder/decoder and every quality metric
 # lives together, so codec comparisons are apples-to-apples.
 
-FROM debian:bookworm-slim AS builder
+FROM debian:trixie-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -89,8 +89,8 @@ RUN git clone --depth 1 --branch ${MOZJPEG_REF} https://github.com/mozilla/mozjp
          /out/bin/mozjpeg-cjpeg
 
 # --- rust tools: dssim + oxipng ----------------------------------------------
-# Debian's rustc (1.63) is too old for current dssim/oxipng (need rustc >=1.71 and
-# the 2024 edition), so install a modern stable toolchain via rustup.
+# Debian's packaged rustc trails the minimum versions that current dssim/oxipng
+# releases require, so install a modern stable toolchain via rustup.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --profile minimal \
     && . "$HOME/.cargo/env" \
@@ -98,16 +98,17 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 
 # =============================================================================
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Bulk of the toolbox straight from apt (encoders, generalists, optimizers).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      webp libavif-bin libjpeg-turbo-progs libheif-examples \
+      # libheif loads its HEVC encoder as a plugin, which is only a recommends.
+      webp libavif-bin libjpeg-turbo-progs libheif-examples libheif-plugin-x265 \
       imagemagick libvips-tools ffmpeg libimage-exiftool-perl \
       pngquant optipng zopfli advancecomp pngcrush gifsicle jpegoptim guetzli \
       openimageio-tools nodejs time \
-      libbrotli1 libhwy1 libpng16-16 libjpeg62-turbo libgif7 liblcms2-2 \
+      libbrotli1 libhwy1t64 libpng16-16t64 libjpeg62-turbo libgif7 liblcms2-2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Source-built + rust tools from the builder stage.
