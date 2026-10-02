@@ -4,7 +4,9 @@
 // and run for real inside the Docker image or on a full local setup.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -13,6 +15,7 @@ import { findQualityForTarget } from "../src/pipeline.js";
 import { sweepCodec } from "../src/sweep.js";
 import { writeStrippedPng, pngDimensions } from "../src/image.js";
 import { resolveCommand } from "../src/exec.js";
+import { parseResultsCsv } from "../src/regression.js";
 
 // --- a self-contained PNG writer, so the tests need no image tool for input ---
 const CRC_TABLE = (() => {
@@ -114,6 +117,36 @@ test("sweepCodec builds a rate-distortion curve sorted by quality", { skip: jxlR
     for (let i = 1; i < points.length; i += 1) {
       assert.ok(points[i].ssimulacra2 >= points[i - 1].ssimulacra2 - 0.01, "sorted by ascending ssimulacra2");
       assert.ok(points[i].bytes > 0);
+    }
+  });
+});
+
+const CLI = fileURLToPath(new URL("../bin/compare.js", import.meta.url));
+
+test("one run writes the table, CSV and HTML report from the same search", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const images = join(dir, "images");
+    mkdirSync(images);
+    makeTestPng(join(images, "a.png"), 128, 96);
+    makeTestPng(join(images, "b.png"), 96, 128);
+    const csvPath = join(dir, "out.csv");
+    const htmlPath = join(dir, "out.html");
+
+    const res = spawnSync(process.execPath, [CLI, images, "--target", "85", "--codecs", "jxl,webp", "--csv", csvPath, "--html", htmlPath], { encoding: "utf8" });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /Codec comparison/, "prints the comparison table");
+    assert.match(res.stdout, /Batch summary/, "prints the batch summary");
+
+    const rows = parseResultsCsv(readFileSync(csvPath, "utf8"));
+    assert.equal(rows.length, 4, "one CSV row per image and codec");
+
+    const json = readFileSync(htmlPath, "utf8").match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
+    const data = JSON.parse(json);
+    for (const row of rows) {
+      const image = data.images.find((im) => im.name === row.image);
+      const codec = image.codecs.find((c) => c.name === row.codec);
+      assert.equal(codec.preview.bytes, row.bytes, `${row.image} ${row.codec}: HTML preview matches the CSV`);
+      assert.ok(codec.points.length >= 3, "the report still carries the rate-distortion sweep");
     }
   });
 });

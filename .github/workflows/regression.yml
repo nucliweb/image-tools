@@ -48,11 +48,9 @@ jobs:
       - name: Compare and generate the report
         run: |
           # The comparison runs at the same target the baseline was generated with.
-          # The table + CSV come from the search; the HTML is a separate sweep mode.
+          # One run writes both the CSV the check reads and the HTML report.
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "compare-codecs compare/demos/images --target 90 --csv results.csv"
-          docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \
-            "compare-codecs compare/demos/images --target 90 --html report.html"
+            "compare-codecs compare/demos/images --target 90 --csv results.csv --html report.html"
 
       - name: Check for size regressions
         id: check
