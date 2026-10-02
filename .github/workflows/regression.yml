@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
 
 jobs:
@@ -85,11 +86,25 @@ jobs:
         env:
           FAILED: ${{ steps.check.outputs.failed }}
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
         with:
           script: |
             const fs = require('fs');
             const failed = process.env.FAILED === 'true';
             const url = process.env.ARTIFACT_URL;
+            const { owner, repo } = context.repo;
+            // Artifacts expire (the repository's retention setting), after which the
+            // link stops working; read the real date so the comment can say so. The
+            // comment still goes out without it if the lookup fails.
+            let availability = '';
+            try {
+              const { data: artifact } = await github.rest.actions.getArtifact({
+                owner, repo, artifact_id: Number(process.env.ARTIFACT_ID),
+              });
+              availability = ' Available until ' + artifact.expires_at.slice(0, 10) + ', when GitHub deletes the artifact.';
+            } catch (err) {
+              core.warning('Could not read the artifact expiry: ' + err.message);
+            }
             let table = '';
             try { table = fs.readFileSync('regression.txt', 'utf8').trim(); } catch {}
             const marker = '<!-- codec-comparison-report -->';
@@ -97,7 +112,7 @@ jobs:
               marker,
               '### Codec comparison ' + (failed ? '❌ size regression' : '✅ no size regression'),
               '',
-              '📥 **[Download the codec report](' + url + ')** (unzip and open `report.html` locally).',
+              '📥 **[Download the codec report](' + url + ')** (unzip and open `report.html` locally).' + availability,
               '',
               '<details><summary>Size check</summary>',
               '',
@@ -106,7 +121,6 @@ jobs:
               '```',
               '</details>',
             ].join('\n');
-            const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
             const existing = comments.find((c) => c.body.includes(marker));
