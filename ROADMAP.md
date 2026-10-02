@@ -17,7 +17,6 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 
 ### Environment
 
-- **Newer base image.** The image is built on Debian bookworm, whose packaged encoders (avifenc 0.11, libheif, libwebp) lag well behind upstream. Moving to Debian trixie, or building those encoders from source like the others, keeps the comparison relevant to what people ship today. The size-regression gate makes the resulting shift in sizes visible, and the baseline is regenerated in the same change.
 - **Published image.** Publish the image to the GitHub Container Registry so users can `docker pull` it instead of building every codec from source.
 
 ### Size-regression gate
