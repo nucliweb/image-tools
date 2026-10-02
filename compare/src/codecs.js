@@ -47,7 +47,7 @@ export const CODECS = {
     encoder: "avifenc",
     decoder: "avifdec",
     // Use the color quantizer (0..63, 0 = lossless), the only quality knob common
-    // to both avifenc 0.11 (Debian) and 1.x (Homebrew, where -q is preferred).
+    // to both avifenc 0.11 and 1.x (where -q is preferred).
     // Higher quantizer means lower quality, so the score decreases with the knob.
     knob: { lo: 0, hi: 63, increasing: false, integer: true },
     sweep: [45, 35, 28, 20, 12],
