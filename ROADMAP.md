@@ -15,10 +15,6 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 - **More demo material.** Broaden the sample set (currently three Kodak images) with more images and content types, so the demo report shows how codec winners change with the subject.
 - **CSV and HTML from one run.** The table and CSV come from the search, and the HTML report from a separate sweep, so CI invokes `compare-codecs` twice on the same images. Producing both outputs from a single invocation would halve that cost and simplify the workflows.
 
-### Environment
-
-- **Published image.** Publish the image to the GitHub Container Registry so users can `docker pull` it instead of building every codec from source.
-
 ### Size-regression gate
 
 - **Check the target.** The baseline records the target it was generated at, but the check does not compare it with the run's target, so a changed target in the workflow would compare unrelated numbers without warning.
