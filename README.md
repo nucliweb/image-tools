@@ -36,7 +36,7 @@ The entrypoint is `bash`. To run a single command from the host without an inter
 docker run --rm -v "$PWD:/work" --entrypoint bash ghcr.io/nucliweb/image-tools -c 'compare-codecs /work/photo.png --target 90'
 ```
 
-`latest` follows `main`. Every published build is also tagged `sha-<short commit>`, so a comparison can cite the exact image it ran on and be reproduced later. Sizes at equal quality can differ slightly between amd64 and arm64 (encoders take different SIMD paths), so compare numbers produced on the same architecture.
+`latest` follows `main`. Every published build is also tagged `sha-<short commit>`, so a comparison can cite the exact image it ran on and be reproduced later. Each release publishes its version too (`0.1.0`, and `0.1` for the latest patch of that minor version). Sizes at equal quality can differ slightly between amd64 and arm64 (encoders take different SIMD paths), so compare numbers produced on the same architecture.
 
 To build the image yourself instead, see [Building and verifying the image](#building-and-verifying-the-image).
 
