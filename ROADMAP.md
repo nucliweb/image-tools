@@ -12,6 +12,7 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 
 - **Rate-distortion analysis mode.** A dedicated rate-distortion output, curves of size versus quality across a range of targets, beyond the single chart embedded in the HTML report. This is the highest-value idea: it turns the tool from a point comparison at one quality into a full RD picture per codec.
 - **More codecs.** Extend beyond the current six as encoders mature or new ones become relevant. Low effort per codec, since the equal-quality search already generalises across quality knobs.
+- **Reusable GitHub Action.** Package the comparison and the size-and-quality regression gate as an action on the GitHub Marketplace, so another repository can compare codecs on its own images and gate on a baseline without copying the workflows. The current workflows (the weekly comparison and the regression gate) are the first two steps toward it.
 - **More demo material.** Broaden the sample set (currently three Kodak images) with more images and content types, so the demo report shows how codec winners change with the subject.
 
 ### Documentation
