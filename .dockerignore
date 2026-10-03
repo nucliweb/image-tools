@@ -6,9 +6,6 @@
 .dockerignore
 .github
 
-# Local-only material, never part of the image
-harness-proyecto/
-
 # Non-reproducible / heavy demo inputs (fetched via compare/demos/fetch.sh)
 compare/demos/images/
 
