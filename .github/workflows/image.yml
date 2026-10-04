@@ -124,6 +124,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          # The default flavor (latest=auto) also tags a semver release as `latest`;
+          # turn it off so only the rule below, on main, moves `latest`.
+          flavor: latest=false
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
