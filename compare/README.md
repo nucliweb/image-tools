@@ -198,7 +198,7 @@ the one the baseline was generated at. The workflow defines the target once and 
 it to both the comparison and the check.
 
 The check runs on pull requests that can change codec output (the `Dockerfile`, the
-comparison sources, or the baseline), and on `main`. On a pull request it also uploads
+comparison sources, the demo images, or the baseline), and on `main`. On a pull request it also uploads
 the HTML report and posts a sticky comment linking it (a download; open `report.html`
 locally), with the date the artifact expires.
 

@@ -103,7 +103,7 @@ The comparison tool has its own detailed docs in [`compare/README.md`](compare/R
 
 ```bash
 cd compare/demos
-./fetch.sh                                   # download the sample images
+./fetch.sh                                   # photos, illustration, texture, UI, diagram
 compare-codecs images --target 90 --html report.html
 ```
 
