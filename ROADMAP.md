@@ -4,13 +4,13 @@ This is a lightweight list of ideas under consideration. Nothing here is committ
 
 ## Status
 
-The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF, WebP, jpegli, mozjpeg, HEIC) with equal-quality search, batch mode, CSV output, per-codec encode timing, matched encoder effort (`--effort`), and a self-contained interactive HTML report with a difference view and a rate–distortion chart. All three test layers (unit, gated integration, and the image E2E build) run in CI, alongside a size-regression gate against a committed baseline that comments on pull requests, and a weekly comparison report on the demo images.
+The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF, WebP, jpegli, mozjpeg, HEIC) with equal-quality search, batch mode, CSV output, per-codec encode timing, matched encoder effort (`--effort`), a rate-distortion mode (`--rd`) with BD-rate against mozjpeg, and a self-contained interactive HTML report with a difference view and a rate–distortion chart. All three test layers (unit, gated integration, and the image E2E build) run in CI, alongside a size-regression gate against a committed baseline that comments on pull requests, and a weekly comparison report on the demo images.
 
 ## Ideas
 
 ### Features
 
-- **Rate-distortion analysis mode.** A dedicated rate-distortion output, curves of size versus quality across a range of targets, beyond the single chart embedded in the HTML report. This is the highest-value idea: it turns the tool from a point comparison at one quality into a full RD picture per codec.
+- **Rate-distortion curves in the HTML report.** Plot the `--rd` equal-quality curves and BD-rates in the interactive report, replacing its coarse fixed-knob sweep, so the chart and the terminal output share the same measured points.
 - **More codecs.** Extend beyond the current six as encoders mature or new ones become relevant. Low effort per codec, since the equal-quality search already generalises across quality knobs.
 - **Reusable GitHub Action.** Package the comparison and the size-and-quality regression gate as an action on the GitHub Marketplace, so another repository can compare codecs on its own images and gate on a baseline without copying the workflows. The current workflows (the weekly comparison and the regression gate) are the first two steps toward it.
 - **More demo material.** Broaden the sample set (currently three Kodak images) with more images and content types, so the demo report shows how codec winners change with the subject.
@@ -21,7 +21,7 @@ The current state is stable: `compare-codecs` supports six codecs (JPEG XL, AVIF
 
 ### Testing
 
-No test debt is outstanding; the three layers cover the current surface. New coverage follows new behaviour: adding codecs or the rate-distortion mode brings its own tests.
+No test debt is outstanding; the three layers cover the current surface. New coverage follows new behaviour: adding codecs brings its own tests.
 
 ## Contributing an idea
 

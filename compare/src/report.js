@@ -1,3 +1,5 @@
+import { imageBdRates } from "./rd.js";
+
 const bySizeAscending = (a, b) => a.bytes - b.bytes;
 
 function formatBytes(bytes) {
@@ -149,4 +151,75 @@ export function toCsv(results) {
       `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
   );
   return [header, ...body].join("\n");
+}
+
+const formatBdRate = (rate) => (rate === null ? "n/a" : `${rate > 0 ? "+" : ""}${rate.toFixed(1)}%`);
+const byRateAscending = (rateOf) => (a, b) => (rateOf(a) ?? Infinity) - (rateOf(b) ?? Infinity);
+
+/**
+ * Render one image's rate-distortion result as an ASCII table: one row per codec,
+ * its bpp at each target, and its BD-rate against the baseline (best first).
+ */
+export function toRdTable(imageRd, meta) {
+  const rates = imageBdRates(imageRd.codecs, meta.baselineId);
+  const rows = [...imageRd.codecs].sort(byRateAscending((c) => rates.get(c.id)));
+  const columns = [
+    { header: "Codec", align: "left" },
+    ...meta.targets.map((t) => ({ header: `bpp @${t}`, align: "right" })),
+    { header: `BD-rate vs ${meta.baselineName}`, align: "right" },
+  ];
+  const body = rows.map((c) => [
+    c.name,
+    ...meta.targets.map((t) => {
+      const p = c.points.find((point) => point.target === t);
+      return p ? `${p.bpp.toFixed(3)}${p.reached === false ? " *" : ""}` : "n/a";
+    }),
+    c.id === meta.baselineId ? "baseline" : formatBdRate(rates.get(c.id)),
+  ]);
+  const heading = [
+    `Rate–distortion — ${imageRd.image} (${imageRd.width}×${imageRd.height})`,
+    `Targets: ssimulacra2 ${meta.targets.join(", ")} (bpp at each; BD-rate < 0 means fewer bits at equal quality).`,
+    "",
+  ];
+  const unreached = rows.some((c) => c.points.some((p) => p.reached === false));
+  const footnote = unreached
+    ? ["", "* target not reachable for this image (codec range exhausted); closest setting shown."]
+    : [];
+  return [...heading, asciiTable(columns, body), ...footnote].join("\n");
+}
+
+/** Render the mean BD-rate per codec over a batch of images as an ASCII table. */
+export function toRdAggregateTable(rows, meta) {
+  const columns = [
+    { header: "Codec", align: "left" },
+    { header: `mean BD-rate vs ${meta.baselineName}`, align: "right" },
+    { header: "rated", align: "right" },
+  ];
+  const body = rows.map((r) => [
+    r.name,
+    r.id === meta.baselineId ? "baseline" : formatBdRate(r.meanBdRate),
+    `${r.rated}/${r.count}`,
+  ]);
+  const heading = [
+    `Rate–distortion summary — ${meta.imageCount} images, targets ssimulacra2 ${meta.targets.join(", ")}`,
+    "",
+  ];
+  return [...heading, asciiTable(columns, body)].join("\n");
+}
+
+/** Render rate-distortion results as CSV, one row per (image, codec, target). */
+export function toRdCsv(perImageRd) {
+  const head = "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations";
+  const lines = [];
+  for (const { image, codecs } of perImageRd) {
+    for (const c of codecs) {
+      for (const p of c.points) {
+        lines.push(
+          `${csvField(image)},${csvField(c.name)},${p.target},${csvField(p.label)},${p.bytes},` +
+            `${p.bpp.toFixed(4)},${p.ssimulacra2.toFixed(4)},${p.dssim.toFixed(6)},${p.reached},${p.iterations}`,
+        );
+      }
+    }
+  }
+  return [head, ...lines].join("\n");
 }

@@ -41,10 +41,40 @@ Options:
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--effort <0..10>` | codec default | Matched encoder effort across codecs that have the knob (higher = slower) |
 | `--time-runs <n>` | `1` | Time each codec's encode n times and report the median |
+| `--rd <list>` | — | Rate-distortion mode: search each codec at every target in the list (replaces `--target`) |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
 | `--html-max-dim <n>` | `1600` | Downscale embedded report images above this size |
 | `--keep` | off | Keep the temporary work directory |
+
+## Rate-distortion mode
+
+A single target compares codecs at one operating point, and the winner can change with the quality you aim for. `--rd` runs the equal-quality search at **each target in a list**, so every codec is measured at the same quality points, and reports the whole size-versus-quality curve:
+
+```bash
+compare-codecs images/ --rd 70,80,85,90,95 --csv rd.csv
+```
+
+For each image it prints the bpp each codec needs at every target, and its **BD-rate** against mozjpeg (the first selected codec when mozjpeg is not among `--codecs`):
+
+```
++---------+---------+---------+---------+---------+---------+--------------------+
+| Codec   | bpp @70 | bpp @80 | bpp @85 | bpp @90 | bpp @95 | BD-rate vs mozjpeg |
++---------+---------+---------+---------+---------+---------+--------------------+
+| JPEG XL |   0.745 |   1.208 |   1.640 |   2.452 | 3.296 * |             -27.3% |
+| HEIC    | 0.731 * | 1.209 * | 1.859 * |   2.881 | 5.957 * |             -17.1% |
+| AVIF    |   0.767 |   1.316 |   1.805 |   3.052 | 8.343 * |             -16.2% |
+| jpegli  |   0.911 |   1.381 |   1.830 |   2.658 | 3.516 * |             -15.5% |
+| mozjpeg |   0.901 |   1.451 |   2.335 |   4.097 | 8.048 * |           baseline |
+| WebP    | 1.010 * |   1.543 |   2.052 |   3.535 | 3.597 * |              +0.7% |
++---------+---------+---------+---------+---------+---------+--------------------+
+```
+
+That is `kodim04.png` in the Docker image. A `*` marks a target the codec could not reach (its range is exhausted), as in the single-target table; the curve uses the quality the codec actually reached there, not the target.
+
+BD-rate (the Bjøntegaard delta rate) is the average difference in bits at equal quality across the range both curves cover: `-30%` means the codec needs, on average, 30% fewer bits than the baseline for the same ssimulacra2 score. Rate is interpolated piecewise-linearly in the log domain between the measured points, rather than with the classic cubic fit, so it stays well-behaved with few targets and never overshoots. A codec whose curve does not overlap the baseline's (for example, one pinned at its range bound at every target) shows `n/a`.
+
+With more than one image, a summary prints each codec's **mean BD-rate** across the images it could be rated on. `--csv` writes one row per image, codec and target (`image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations`), ready to plot. The cost is one equal-quality search per target, so five targets take about five times as long as a single-target run. `--html` is not available in this mode; the HTML report keeps its own coarse rate–distortion sweep.
 
 ## Interactive HTML report
 

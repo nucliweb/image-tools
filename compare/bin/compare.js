@@ -10,7 +10,16 @@ import { run, resolveCommand } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
 import { sweepCodec } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
-import { toComparisonTable, toCsv, toAggregateTable, toBatchCsv } from "../src/report.js";
+import { parseTargets, aggregateBdRates } from "../src/rd.js";
+import {
+  toComparisonTable,
+  toCsv,
+  toAggregateTable,
+  toBatchCsv,
+  toRdTable,
+  toRdAggregateTable,
+  toRdCsv,
+} from "../src/report.js";
 
 const USAGE = `Usage: compare-codecs <image-or-dir...> [options]
 
@@ -27,6 +36,9 @@ Options:
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
+      --rd <list>           Rate-distortion mode: search every codec at each of these
+                            targets (e.g. 70,80,85,90,95), report bpp per target and
+                            BD-rate vs mozjpeg; replaces --target
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive self-contained HTML report
       --html-max-dim <n>    Downscale embedded report images above this size (default: 1600)
@@ -50,6 +62,7 @@ function parse() {
       "max-iterations": { type: "string", default: "10" },
       effort: { type: "string" },
       "time-runs": { type: "string", default: "1" },
+      rd: { type: "string" },
       csv: { type: "string" },
       html: { type: "string" },
       "html-max-dim": { type: "string", default: "1600" },
@@ -77,6 +90,19 @@ function main() {
     effort = Number(values.effort);
     if (!Number.isFinite(effort) || effort < 0 || effort > 10) {
       console.error("--effort must be a number in 0..10.");
+      process.exit(1);
+    }
+  }
+  let rdTargets = null;
+  if (values.rd !== undefined) {
+    try {
+      rdTargets = parseTargets(values.rd);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    if (values.html) {
+      console.error("--html is not supported with --rd; run them separately.");
       process.exit(1);
     }
   }
@@ -116,6 +142,14 @@ function main() {
       return pngDataUri(small);
     };
 
+    const searchOpts = { tolerance, maxIterations, timeRuns, effort };
+    const baselineId = ids.includes("mozjpeg") ? "mozjpeg" : ids[0];
+    const baselineName = CODECS[baselineId]?.name ?? baselineId;
+    if (rdTargets) {
+      runRd(images, ids, rdTargets, workdir, searchOpts, { baselineId, baselineName, csv: values.csv });
+      return;
+    }
+
     // One equal-quality search per image and codec feeds every output: the table,
     // the CSV and the HTML report. The report adds a rate-distortion sweep per codec.
     const perImage = [];
@@ -137,13 +171,7 @@ function main() {
       for (const id of ids) {
         const codec = CODECS[id];
         process.stderr.write(`  → ${codec.name} …\n`);
-        const op = findQualityForTarget(codec, image, target, workdir, {
-          tolerance,
-          maxIterations,
-          timeRuns,
-          effort,
-          referenceNorm: refNorm,
-        });
+        const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
         results.push(op);
         if (!values.html) continue;
 
@@ -188,9 +216,7 @@ function main() {
     console.log(blocks.join("\n\n"));
 
     if (perImage.length > 1) {
-      const baselineId = ids.includes("mozjpeg") ? "mozjpeg" : ids[0];
       const rows = aggregate(perImage, { baselineId });
-      const baselineName = CODECS[baselineId]?.name ?? baselineId;
       console.log(`\n${toAggregateTable(rows, { imageCount: perImage.length, target, baselineName })}`);
     }
 
@@ -207,6 +233,56 @@ function main() {
   } finally {
     if (!values.keep) rmSync(workdir, { recursive: true, force: true });
     else process.stderr.write(`Kept work dir: ${workdir}\n`);
+  }
+}
+
+/**
+ * Rate-distortion mode: run the equal-quality search for every image, codec and
+ * target, then print one RD table per image (bpp per target and BD-rate vs the
+ * baseline), a mean BD-rate summary for a batch, and optionally a long CSV.
+ */
+function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baselineName, csv }) {
+  const perImage = [];
+  images.forEach((image, idx) => {
+    const refNorm = join(workdir, `img${idx}.norm.png`);
+    let dims;
+    try {
+      writeStrippedPng(image, refNorm);
+      dims = pngDimensions(refNorm);
+    } catch {
+      process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
+      return;
+    }
+
+    process.stderr.write(`# ${basename(image)}\n`);
+    const codecs = ids.map((id) => {
+      const codec = CODECS[id];
+      process.stderr.write(`  → ${codec.name} @ ${targets.join(", ")} …\n`);
+      const points = targets.map((target) => {
+        const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
+        return { target, ...op };
+      });
+      return { id, name: codec.name, points };
+    });
+    perImage.push({ image: basename(image), width: dims.width, height: dims.height, codecs });
+  });
+
+  if (perImage.length === 0) {
+    console.error("No usable PNG images.");
+    process.exit(1);
+  }
+
+  const meta = { targets, baselineId, baselineName };
+  console.log(perImage.map((p) => toRdTable(p, meta)).join("\n\n"));
+
+  if (perImage.length > 1) {
+    const rows = aggregateBdRates(perImage, baselineId);
+    console.log(`\n${toRdAggregateTable(rows, { ...meta, imageCount: perImage.length })}`);
+  }
+
+  if (csv) {
+    writeFileSync(csv, `${toRdCsv(perImage)}\n`);
+    process.stderr.write(`Wrote ${csv}\n`);
   }
 }
 
