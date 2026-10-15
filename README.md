@@ -40,6 +40,18 @@ docker run --rm -v "$PWD:/work" --entrypoint bash ghcr.io/nucliweb/image-tools -
 
 To build the image yourself instead, see [Building and verifying the image](#building-and-verifying-the-image).
 
+## In GitHub Actions
+
+[Compare image codecs](https://github.com/nucliweb/compare-codecs-action) runs `compare-codecs` from this image on your own repository's images, writes the table to the job summary, and can gate pull requests on a size and quality baseline:
+
+```yaml
+- uses: nucliweb/compare-codecs-action@v1
+  with:
+    images: assets/photos
+    target: 90
+    baseline: .github/codec-baseline.json
+```
+
 ## Native use
 
 The same tools run natively (see [`INVENTORY.md`](INVENTORY.md) for what a Homebrew setup provides). The comparison tool needs Node.js ≥ 18 and the codecs on `PATH`:
