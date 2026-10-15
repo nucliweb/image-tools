@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toComparisonTable, toAggregateTable, toCsv } from "../src/report.js";
+import { toComparisonTable, toAggregateTable, toCsv, toRdTable, toRdAggregateTable, toRdCsv } from "../src/report.js";
 
 const results = [
   { name: "AVIF", label: "-q 87", bytes: 55966, bpp: 1.708, ssimulacra2: 90.46, dssim: 0.00033, iterations: 7, encodeWallMs: 410, encodeCpuMs: 1290, totalEncodeWallMs: 1800, totalEncodeCpuMs: 5400 },
@@ -70,4 +70,51 @@ test("csv has a header row and one row per result, sorted by size", () => {
   );
   assert.match(lines[1], /^JPEG XL,-d 0\.86,41822,.*,842,1560,4200,7800$/);
   assert.match(lines[2], /^AVIF,-q 87,55966,.*,410,1290,1800,5400$/);
+});
+
+const rdPoint = (target, bpp, ssimulacra2, reached = true) => ({
+  target, label: `-q ${target}`, bytes: Math.round(bpp * 1000), bpp, ssimulacra2, dssim: 0.0005, reached, iterations: 4,
+});
+const rdImage = {
+  image: "photo.png",
+  width: 512,
+  height: 512,
+  codecs: [
+    { id: "mozjpeg", name: "mozjpeg", points: [rdPoint(80, 2, 80), rdPoint(90, 4, 90)] },
+    { id: "jxl", name: "JPEG XL", points: [rdPoint(80, 1, 80), rdPoint(90, 2, 89.2, false)] },
+  ],
+};
+
+test("RD table has a bpp column per target and BD-rate vs the baseline, best first", () => {
+  const table = toRdTable(rdImage, { targets: [80, 90], baselineId: "mozjpeg", baselineName: "mozjpeg" });
+  assert.match(table, /\+-+\+/, "expected an ASCII +---+ border row");
+  assert.match(table, /photo\.png/);
+  assert.match(table, /bpp @80/);
+  assert.match(table, /bpp @90/);
+  assert.match(table, /BD-rate vs mozjpeg/);
+  assert.ok(table.indexOf("JPEG XL") < table.indexOf("| mozjpeg"), "lower BD-rate first");
+  assert.match(table, /2\.000 \*/, "unreached point is marked");
+  assert.match(table, /-48\.6%/); // overlap 80..89.2: 2^-0.96 - 1
+  assert.match(table, /baseline/);
+});
+
+test("RD aggregate table shows the mean BD-rate and how many images were rated", () => {
+  const rows = [
+    { id: "jxl", name: "JPEG XL", meanBdRate: -42.25, rated: 2, count: 3 },
+    { id: "mozjpeg", name: "mozjpeg", meanBdRate: 0, rated: 3, count: 3 },
+    { id: "heic", name: "HEIC", meanBdRate: null, rated: 0, count: 3 },
+  ];
+  const table = toRdAggregateTable(rows, { imageCount: 3, targets: [70, 90], baselineId: "mozjpeg", baselineName: "mozjpeg" });
+  assert.match(table, /mean BD-rate vs mozjpeg/);
+  assert.match(table, /-42\.3%/);
+  assert.match(table, /2\/3/);
+  assert.match(table, /n\/a/);
+  assert.match(table, /\| mozjpeg +\| +baseline \|/, "the baseline is labelled, not rated against itself");
+});
+
+test("RD CSV has one row per image, codec and target", () => {
+  const lines = toRdCsv([rdImage]).split("\n");
+  assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations");
+  assert.equal(lines.length, 5);
+  assert.equal(lines[1], "photo.png,mozjpeg,80,-q 80,2000,2.0000,80.0000,0.000500,true,4");
 });

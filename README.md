@@ -61,6 +61,8 @@ compare-codecs <image-or-dir...> [options]
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
+      --rd <list>           Rate-distortion mode: search every codec at each target in the
+                            list, report bpp per target and BD-rate vs mozjpeg
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive, self-contained HTML report
       --keep                Keep the temporary work directory
@@ -78,6 +80,9 @@ compare-codecs images/ --target 90 --csv results.csv
 
 # Interactive report: wipe, format toggle, difference view, rate–distortion chart, quality slider
 compare-codecs images/ --target 90 --html report.html
+
+# Rate-distortion: bpp at several quality targets and BD-rate vs mozjpeg
+compare-codecs images/ --rd 70,80,85,90,95 --csv rd.csv
 ```
 
 The comparison tool has its own detailed docs in [`compare/README.md`](compare/README.md).

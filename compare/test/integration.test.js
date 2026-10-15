@@ -150,3 +150,26 @@ test("one run writes the table, CSV and HTML report from the same search", { ski
     }
   });
 });
+
+test("RD mode searches every codec at each target and rates it against the baseline", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const images = join(dir, "images");
+    mkdirSync(images);
+    makeTestPng(join(images, "a.png"), 128, 96);
+    makeTestPng(join(images, "b.png"), 96, 128);
+    const csvPath = join(dir, "rd.csv");
+
+    const res = spawnSync(process.execPath, [CLI, images, "--rd", "75,85", "--codecs", "jxl,webp", "--csv", csvPath], { encoding: "utf8" });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /Rate–distortion — a\.png/, "prints one RD table per image");
+    assert.match(res.stdout, /bpp @75 \| bpp @85 \| BD-rate vs JPEG XL/, "first codec is the baseline without mozjpeg");
+    assert.match(res.stdout, /Rate–distortion summary — 2 images/, "prints the batch summary");
+    assert.doesNotMatch(res.stdout, /Codec comparison/, "replaces the single-target table");
+
+    const lines = readFileSync(csvPath, "utf8").trim().split("\n");
+    assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations");
+    assert.equal(lines.length - 1, 2 * 2 * 2, "one CSV row per image, codec and target");
+    const webp85 = lines.find((l) => l.startsWith("a.png,WebP,85,"));
+    assert.ok(webp85, "a row for each target");
+  });
+});
