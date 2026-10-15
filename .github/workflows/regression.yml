@@ -5,7 +5,7 @@ name: Size regression gate
 # (compare/demos/baseline.json). Both are deterministic given the pinned codec
 # versions in the image; timing is never checked. On pull requests it
 # also uploads the HTML report and posts a sticky comment linking it. Runs on the
-# PRs that can change codec output (Dockerfile, comparison sources, the baseline),
+# PRs that can change codec output (Dockerfile, comparison sources, the demo images, the baseline),
 # plus main and on demand. Regenerate the baseline after a deliberate change with:
 #   (download results.csv from this workflow's artifact; CI runs on amd64)
 #   node compare/bin/check-regression.js compare/demos/baseline.json results.csv --update --target 90
@@ -16,6 +16,8 @@ on:
       - "compare/src/**"
       - "compare/bin/**"
       - "compare/demos/baseline.json"
+      - "compare/demos/fetch.sh"
+      - "compare/demos/own/**"
       - ".github/workflows/regression.yml"
   push:
     branches: [main]
