@@ -45,3 +45,9 @@ test("resolveCodecIds reads the default set, an explicit list, or every codec", 
 test("resolveCodecIds rejects unknown codecs and names the known ones", () => {
   assert.throws(() => resolveCodecIds("jxl,webp2"), /Unknown codec\(s\): webp2\. Known: .*webp-sharp/);
 });
+
+test("heic-444 is HEIC with x265 asked for 4:4:4 chroma", () => {
+  assert.deepEqual(buildEncodeArgs(CODECS["heic-444"], "in", "out", 80, null), ["-p", "chroma=444", "in", "-q", "80", "-o", "out"]);
+  assert.equal(CODECS["heic-444"].decoder, CODECS.heic.decoder);
+  assert.ok(!DEFAULT_CODECS.includes("heic-444"));
+});

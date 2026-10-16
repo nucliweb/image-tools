@@ -216,6 +216,32 @@ Where both reach the target, sharp YUV is 3–11% smaller at the same quality. W
 
 **References.** [`cwebp` documentation](https://developers.google.com/speed/webp/docs/cwebp) (`-sharp_yuv`: "Use more accurate and sharper RGB->YUV conversion", slower than the default); [libwebp's `sharpyuv` library](https://github.com/webmproject/libwebp/tree/main/sharpyuv), which `libavif` also uses.
 
+### HEIC 4:4:4 (`heic-444`)
+
+**What it changes.** `heif-enc` asks its HEVC encoder (x265) for 4:2:0 chroma by default, the same half-resolution color as lossy WebP. `-p chroma=444` passes x265 its `chroma=444` parameter and keeps color at full resolution. HEVC carries 4:4:4 only in its [Range Extensions](https://hevc.hhi.fraunhofer.de/rext) (RExt) profiles, not in the Main and Main 10 profiles most hardware decoders implement, so a decoder needs RExt support to read it; `heif-info` reports the result as `YCbCr, 4:4:4`.
+
+**What it is worth on the demo images** (target ssimulacra2 90, image 0.2.0, decoded with libheif):
+
+| Image | HEIC (4:2:0) | HEIC 4:4:4 |
+| --- | --- | --- |
+| `kodim04.png` (photo) | 138.3 KB, 89.8 | 137.7 KB, 90.2 (−0.5%) |
+| `kodim19.png` (photo) | 151.7 KB, 89.9 | **139.7 KB**, 89.7 (−8%) |
+| `kodim23.png` (photo) | 153.9 KB, 90.2 | **111.6 KB**, 90.2 (−28%) |
+| `forest-leaves.png` (texture) | 696.5 KB, 90.5 | 683.8 KB, 90.2 (−2%) |
+| `corporate-memphis.png` (illustration) | 67.1 KB, 88.0 * | **25.0 KB**, 89.7 |
+| `report-ui.png` (UI, text) | 194.3 KB, 83.2 * | **82.1 KB**, 90.2 |
+| `pipeline-diagram.png` (diagram) | 94.8 KB, 73.4 * | **84.2 KB**, 89.7 |
+
+4:4:4 reaches the target on all seven images, against four for 4:2:0, and is never larger: on the UI screenshot it is 58% smaller *and* reaches a quality 4:2:0 cannot. At this quality level, halving the color resolution does not save bytes; it costs them, because the search has to raise the quality setting to win back the lost color (`-q 94–97` for 4:2:0 against `-q 57–75` for 4:4:4 on the three images 4:2:0 cannot reach). Encoding takes up to about 1.4× as long.
+
+**The decoder matters too.** The harness decodes with libheif. Decoding the same files with Apple's ImageIO (`sips`, macOS 27.0.1) gives the same score for 4:4:4 (within ±0.5), but 0.9 to 6.6 points *lower* for 4:2:0 on six of the seven images (report UI 83.2 → 77.8, illustration 88.0 → 81.5): Apple upsamples the color differently from libheif. A 4:2:0 HEIC therefore looks worse on an Apple device than the harness measures, and 4:4:4 avoids the gap.
+
+**Takeaway.** For HEIC at high quality, 4:4:4 is smaller and better, and Apple's decoder reads it. Check the decoders you target before relying on it, since 4:4:4 needs HEVC RExt and many hardware decoders only implement Main and Main 10.
+
+**Using it.** `heif-enc -p chroma=444`; in libheif's API, the x265 encoder parameter `chroma` (`heif-enc -P` lists it, `{ 420, 422, 444 }`, default 420).
+
+**References.** [HEVC Format Range Extensions](https://hevc.hhi.fraunhofer.de/rext) (Fraunhofer HHI: RExt adds 4:0:0, 4:2:2 and 4:4:4); [libheif](https://github.com/strukturag/libheif); [x265 `--input-csp`](https://x265.readthedocs.io/en/master/cli.html#cmdoption-input-csp), the color space x265 encodes.
+
 ## Size-regression gate
 
 CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) versus

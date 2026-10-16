@@ -128,6 +128,10 @@ function variant(base, { id, name, extraArgs }) {
 // solves for the luma and chroma that reconstruct the RGB best after upsampling.
 CODECS["webp-sharp"] = variant(CODECS.webp, { id: "webp-sharp", name: "WebP sharp YUV", extraArgs: ["-sharp_yuv"] });
 
+// heif-enc asks x265 for 4:2:0 by default; chroma=444 keeps full-resolution color,
+// which needs the HEVC Range Extensions profile on the decoding side.
+CODECS["heic-444"] = variant(CODECS.heic, { id: "heic-444", name: "HEIC 4:4:4", extraArgs: ["-p", "chroma=444"] });
+
 export const DEFAULT_CODECS = ["jxl", "avif", "webp", "jpegli", "mozjpeg", "heic"];
 
 /**
