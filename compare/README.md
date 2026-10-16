@@ -242,6 +242,32 @@ Where both reach the target, sharp YUV is 3–11% smaller at the same quality. W
 
 **References.** [HEVC Format Range Extensions](https://hevc.hhi.fraunhofer.de/rext) (Fraunhofer HHI: RExt adds 4:0:0, 4:2:2 and 4:4:4); [libheif](https://github.com/strukturag/libheif); [x265 `--input-csp`](https://x265.readthedocs.io/en/master/cli.html#cmdoption-input-csp), the color space x265 encodes.
 
+### AVIF rav1e (`avif-rav1e`)
+
+**What it changes.** AVIF is the AV1 format, and AV1 has several independent encoders. `avifenc` auto-selects one from those libavif was built with, which in the image is **aom** (libaom, the Alliance for Open Media reference encoder); `-c rav1e` selects **[rav1e](https://github.com/xiph/rav1e)** instead, a Rust encoder from Xiph that describes itself as "the fastest and safest AV1 encoder" and is the engine behind pure-Rust tools such as [cavif](https://github.com/kornelski/cavif-rs). The bitstream is AV1 either way, decoded by the same decoders; only the encoder's decisions differ. The variant keeps AVIF's quantizer knob and speed mapping, and needs an `avifenc` built with rav1e (`avifenc --version` lists `rav1e [enc]`; Homebrew's is built without it).
+
+**What it is worth on the demo images** (target ssimulacra2 90, image 0.2.0, both at avifenc's default speed 6):
+
+| Image | AVIF (aom) | AVIF rav1e | Encode time |
+| --- | --- | --- | --- |
+| `kodim04.png` (photo) | 146.5 KB, 90.1 | **142.2 KB**, 90.0 (−3%) | 110 ms → 1.07 s |
+| `kodim19.png` (photo) | 145.1 KB, 89.8 | **142.2 KB**, 89.8 (−2%) | 110 ms → 1.00 s |
+| `kodim23.png` (photo) | **108.9 KB**, 89.7 | 119.7 KB, 90.3 (+10%) | 80 ms → 1.05 s |
+| `forest-leaves.png` (texture) | 805.2 KB, 90.4 | **771.2 KB**, 90.2 (−4%) | 290 ms → 3.95 s |
+| `corporate-memphis.png` (illustration) | **18.7 KB**, 89.9 | 26.6 KB, 90.5 (+43%) | 40 ms → 950 ms |
+| `report-ui.png` (UI, text) | **62.6 KB**, 89.9 | 105.5 KB, 90.2 (+69%) | 640 ms → 1.45 s |
+| `pipeline-diagram.png` (diagram) | **61.3 KB**, 90.1 | 88.5 KB, 90.0 (+44%) | 50 ms → 1.19 s |
+
+On photographs and the texture rav1e is within a few percent of aom, slightly smaller on three of the four. On flat graphics and text aom is far ahead, 43–69% smaller. rav1e is also 2–24× slower here, and its CPU time equals its wall time, so it ran on one core, while aom spread the same work over several.
+
+**Why the gap on graphics?** AV1 has tools aimed at screen content, such as palette mode and intra block copy. libaom counts the 16×16 blocks with few colors and turns them on when enough of the image qualifies ([`encoder.c`](https://aomedia.googlesource.com/aom/+/refs/heads/main/av1/encoder/encoder.c), `allow_screen_content_tools`), while using palette mode is still an [open rav1e issue](https://github.com/xiph/rav1e/issues/1066). They explain only part of it, though: turning them off in aom (`-a enable-palette=0 -a enable-intrabc=0`) grows the UI screenshot by 18%, still far below rav1e, and leaves the illustration and the diagram byte-identical. The rest comes from the encoders' overall decisions rather than any single tool, which is why measuring beats reading feature lists.
+
+**Takeaway.** The encoder matters as much as the format: "AVIF" is not one size at a given quality. With these builds, aom is the better default for AVIF, both smaller on graphics and faster; rav1e is competitive on photographs.
+
+**Using it.** `avifenc -c rav1e` (or `-c aom`, `-c svt`, depending on the build); in [cavif](https://github.com/kornelski/cavif-rs), rav1e is the only encoder.
+
+**References.** [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-c`: "Possible values depend on the codecs enabled at build time"); [rav1e](https://github.com/xiph/rav1e); [libaom](https://aomedia.googlesource.com/aom/).
+
 ## Size-regression gate
 
 CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) versus

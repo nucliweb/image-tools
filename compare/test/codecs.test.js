@@ -51,3 +51,9 @@ test("heic-444 is HEIC with x265 asked for 4:4:4 chroma", () => {
   assert.equal(CODECS["heic-444"].decoder, CODECS.heic.decoder);
   assert.ok(!DEFAULT_CODECS.includes("heic-444"));
 });
+
+test("avif-rav1e is AVIF encoded by rav1e instead of aom, and keeps AVIF's speed mapping", () => {
+  assert.deepEqual(buildEncodeArgs(CODECS["avif-rav1e"], "in", "out", 30, null), ["-c", "rav1e", "--min", "30", "--max", "30", "in", "out"]);
+  assert.deepEqual(buildEncodeArgs(CODECS["avif-rav1e"], "in", "out", 30, 9), ["-s", "1", "-c", "rav1e", "--min", "30", "--max", "30", "in", "out"]);
+  assert.ok(!DEFAULT_CODECS.includes("avif-rav1e"));
+});
