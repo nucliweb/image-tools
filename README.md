@@ -69,7 +69,7 @@ compare-codecs <image-or-dir...> [options]
 
   -t, --target <n>          Target ssimulacra2 score (default: 90)
   -c, --codecs <list>       Comma-separated (default: jxl,avif,webp,jpegli,mozjpeg,heic); opt-in
-                            variants: webp-sharp,heic-444,avif-rav1e,jpeg-turbo; "all" runs
+                            variants: webp-sharp,heic-444,avif-rav1e,jpeg-turbo,avif-svt; "all" runs
                             every codec and variant
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)

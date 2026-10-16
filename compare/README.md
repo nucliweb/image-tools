@@ -270,6 +270,30 @@ On photographs and the texture rav1e is within a few percent of aom, slightly sm
 
 **References.** [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-c`: "Possible values depend on the codecs enabled at build time"); [rav1e](https://github.com/xiph/rav1e); [libaom](https://aomedia.googlesource.com/aom/).
 
+### AVIF SVT-AV1 (`avif-svt`)
+
+**What it changes.** [SVT-AV1](https://gitlab.com/AOMediaCodec/SVT-AV1) is the third AV1 encoder libavif can use (`avifenc -c svt`), after aom and rav1e. It encodes 4:2:0 only: its `--color-format` documentation reads "only yuv420 is supported at this time" ([`Parameters.md`](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md)). `avifenc` defaults to 4:4:4 for PNG input, so `-c svt` alone fails ("Only support 420 now"), and the variant passes `-y 420`. In 4:2:0 it also rejects odd dimensions ("Source Height must be even for YUV_420 colorspace"), which aom accepts; on the 1200×675 diagram the variant fails and the run reports it.
+
+**What it is worth on the demo images** (target ssimulacra2 90, image 0.3.0). The middle column forces aom to 4:2:0 too (`-y 420`, searched to the same target), to tell the encoder apart from the chroma format:
+
+| Image | AVIF (aom, 4:4:4) | aom 4:2:0 | AVIF SVT-AV1 (4:2:0) |
+| --- | --- | --- | --- |
+| `kodim04.png` (photo) | **146.5 KB**, 90.1 | 156.7 KB, 89.9 | 154.9 KB, 89.6 |
+| `kodim19.png` (photo) | **145.1 KB**, 89.8 | 153.6 KB, 90.1 | 148.3 KB, 89.4 * |
+| `kodim23.png` (photo) | **108.9 KB**, 89.7 | 148.5 KB, 89.9 | 168.5 KB, 90.3 |
+| `forest-leaves.png` (texture) | 805.2 KB, 90.4 | **779.3 KB**, 90.4 | 839.0 KB, 90.5 |
+| `corporate-memphis.png` (illustration) | **18.7 KB**, 89.9 | 56.3 KB, 87.8 * | 43.6 KB, 87.7 * |
+| `report-ui.png` (UI, text) | **62.6 KB**, 89.9 | 156.4 KB, 78.8 * | 104.2 KB, 78.7 * |
+| `pipeline-diagram.png` (diagram) | **61.3 KB**, 90.1 | 57.3 KB, 75.4 * | failed (odd height) |
+
+At matched 4:2:0, SVT-AV1 and aom are close on the photographs (−3% to +13%), and on the UI screenshot and the illustration SVT-AV1 reaches the same quality ceiling with fewer bytes (−33% and −22%). What holds it back is the chroma format, not the encoder: forcing aom to 4:2:0 costs it as much (kodim23 +36%, and the illustration, UI and diagram no longer reach the target). Encode times at the default speed are similar to aom's here.
+
+**Takeaway.** SVT-AV1 is built for video, where 4:2:0 is the norm; for still images AVIF's 4:4:4 default is worth more than the choice of encoder. Use SVT-AV1 for AVIF stills only where 4:2:0 is acceptable (photographs), and expect it to reject odd-sized images.
+
+**Using it.** `avifenc -c svt -y 420`; with odd dimensions, crop or pad to even first.
+
+**References.** [SVT-AV1](https://gitlab.com/AOMediaCodec/SVT-AV1) and its [`Parameters.md`](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md) (`--color-format`: "only yuv420 is supported at this time"); [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-y`, and `-c` per build).
+
 ### libjpeg-turbo (`jpeg-turbo`)
 
 **What it changes.** [libjpeg-turbo](https://libjpeg-turbo.org/) is the JPEG library most software links against, and the baseline the other two JPEG encoders improve on: [mozjpeg](https://github.com/mozilla/mozjpeg) is "a patch for libjpeg-turbo" that adds trellis quantization, optimized progressive scans and new quantization tables, and [jpegli](https://github.com/google/jpegli) is a libjpeg62-compatible encoder with adaptive quantization and floating-point color conversion. All three write ordinary JPEG. This variant runs libjpeg-turbo's own `cjpeg` with mozjpeg's command line (`-quality`, 1..100). Debian's `cjpeg` 2.1 does not read PNG (PNG input arrived in 3.2), so the reference is handed over as a binary PPM, converted once with `vips` (lossless for 8-bit RGB) and outside the timed encode.
