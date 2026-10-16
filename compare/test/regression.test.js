@@ -109,3 +109,16 @@ test("fails without comparing when the run's target differs from the baseline's"
 test("baselineFromRows records bytes and ssimulacra2 per image and codec", () => {
   assert.deepEqual(baselineFromRows(parseResultsCsv(csv), 90), baseline);
 });
+
+test("parseResultsCsv skips failed rows, so the gate reports them as missing", () => {
+  const withError = [
+    "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error",
+    "a.png,JPEG XL,-d 0.6,1000,1.0,90.1000,0.0003,true,6,10,10,50,50,",
+    "a.png,AVIF,,,,,,,,,,,,encoder crashed",
+  ].join("\n");
+  const rows = parseResultsCsv(withError);
+  assert.deepEqual(rows.map((r) => r.codec), ["JPEG XL"]);
+  const { failed, rows: checked } = checkRegressions(baseline, rows, { tolerance: 0.02, qualityTolerance: 0.5, target: 90 });
+  assert.equal(failed, true);
+  assert.equal(checked.find((r) => r.codec === "AVIF").status, "missing");
+});

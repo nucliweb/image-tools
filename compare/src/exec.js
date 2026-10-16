@@ -30,6 +30,19 @@ export function run(cmd, args) {
   }
 }
 
+/**
+ * A one-line reason for a failed command, for reports: the stderr that run() and
+ * runTimed() put after "failed: ", reduced to its first line mentioning an error
+ * (encoders tend to print warnings first), or its last line when none does.
+ */
+export function failureReason(err) {
+  const message = String(err?.message ?? err);
+  const at = message.indexOf(" failed: ");
+  const detail = at >= 0 ? message.slice(at + " failed: ".length) : message;
+  const lines = detail.split("\n").map((l) => l.trim()).filter(Boolean);
+  return lines.find((l) => /error/i.test(l)) ?? lines.at(-1) ?? message;
+}
+
 const TIME_BIN = "/usr/bin/time";
 const timingAvailable = existsSync(TIME_BIN);
 

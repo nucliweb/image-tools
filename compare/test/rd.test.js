@@ -92,3 +92,9 @@ test("aggregateBdRates reports null for a codec never rated", () => {
   assert.equal(heic.rated, 0);
   assert.equal(heic.count, 1);
 });
+
+test("bdRate ignores failed points", () => {
+  const anchor = curve([[70, 1], [80, 2], [90, 4]]);
+  const half = [...curve([[70, 0.5], [80, 1], [90, 2]]), { target: 95, failed: true, error: "boom" }];
+  near(bdRate(anchor, half), -50);
+});

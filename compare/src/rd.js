@@ -29,7 +29,8 @@ export function parseTargets(list) {
  */
 function logCurve(points) {
   const curve = [];
-  for (const p of [...points].sort((a, b) => a.ssimulacra2 - b.ssimulacra2)) {
+  const measured = points.filter((p) => !p.failed);
+  for (const p of measured.sort((a, b) => a.ssimulacra2 - b.ssimulacra2)) {
     if (curve.length && curve[curve.length - 1].q === p.ssimulacra2) continue;
     curve.push({ q: p.ssimulacra2, y: Math.log(p.bpp) });
   }

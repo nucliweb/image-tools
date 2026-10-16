@@ -66,10 +66,10 @@ test("csv has a header row and one row per result, sorted by size", () => {
   const lines = csv.trim().split("\n");
   assert.equal(
     lines[0],
-    "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms",
+    "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error",
   );
-  assert.match(lines[1], /^JPEG XL,-d 0\.86,41822,.*,842,1560,4200,7800$/);
-  assert.match(lines[2], /^AVIF,-q 87,55966,.*,410,1290,1800,5400$/);
+  assert.match(lines[1], /^JPEG XL,-d 0\.86,41822,.*,842,1560,4200,7800,$/);
+  assert.match(lines[2], /^AVIF,-q 87,55966,.*,410,1290,1800,5400,$/);
 });
 
 const rdPoint = (target, bpp, ssimulacra2, reached = true) => ({
@@ -114,7 +114,38 @@ test("RD aggregate table shows the mean BD-rate and how many images were rated",
 
 test("RD CSV has one row per image, codec and target", () => {
   const lines = toRdCsv([rdImage]).split("\n");
-  assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations");
+  assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,error");
   assert.equal(lines.length, 5);
-  assert.equal(lines[1], "photo.png,mozjpeg,80,-q 80,2000,2.0000,80.0000,0.000500,true,4");
+  assert.equal(lines[1], "photo.png,mozjpeg,80,-q 80,2000,2.0000,80.0000,0.000500,true,4,");
+});
+
+const failed = { id: "avif-svt", name: "AVIF SVT-AV1", failed: true, error: "Source Height must be even for YUV_420 colorspace" };
+
+test("comparison table lists a failed codec last, with its reason in a footnote", () => {
+  const table = toComparisonTable([failed, ...results], meta);
+  const lines = table.split("\n");
+  const row = lines.find((l) => l.includes("AVIF SVT-AV1"));
+  assert.match(row, /\| +failed \|/);
+  assert.ok(table.indexOf("AVIF SVT-AV1") > table.indexOf("| AVIF "), "failed codecs sort after measured ones");
+  assert.match(table, /† AVIF SVT-AV1 failed: Source Height must be even for YUV_420 colorspace/);
+});
+
+test("CSV keeps a row for a failed codec, with empty metrics and the error", () => {
+  const lines = toCsv([...results, failed]).split("\n");
+  assert.match(lines[0], /,error$/);
+  assert.match(lines[1], /,$/, "measured rows have an empty error");
+  assert.equal(lines.at(-1), "AVIF SVT-AV1,,,,,,,,,,,Source Height must be even for YUV_420 colorspace");
+});
+
+test("RD table marks a failed target, and the CSV carries its error", () => {
+  const withFailure = {
+    ...rdImage,
+    codecs: [...rdImage.codecs, { id: "avif-svt", name: "AVIF SVT-AV1", points: [rdPoint(80, 1.5, 80), { target: 90, failed: true, error: "boom" }] }],
+  };
+  const table = toRdTable(withFailure, { targets: [80, 90], baselineId: "mozjpeg", baselineName: "mozjpeg" });
+  assert.match(table.split("\n").find((l) => l.includes("AVIF SVT-AV1")), /\| +failed \|/);
+  assert.match(table, /† AVIF SVT-AV1 failed at 90: boom/);
+  const csv = toRdCsv([withFailure]).split("\n");
+  assert.match(csv[0], /,error$/);
+  assert.equal(csv.at(-1), "photo.png,AVIF SVT-AV1,90,,,,,,,,boom");
 });

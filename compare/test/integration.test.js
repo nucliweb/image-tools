@@ -167,7 +167,7 @@ test("RD mode searches every codec at each target and rates it against the basel
     assert.doesNotMatch(res.stdout, /Codec comparison/, "replaces the single-target table");
 
     const lines = readFileSync(csvPath, "utf8").trim().split("\n");
-    assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations");
+    assert.equal(lines[0], "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,error");
     assert.equal(lines.length - 1, 2 * 2 * 2, "one CSV row per image, codec and target");
     const webp85 = lines.find((l) => l.startsWith("a.png,WebP,85,"));
     assert.ok(webp85, "a row for each target");
@@ -225,5 +225,52 @@ test("libjpeg-turbo encodes from a PPM copy of the reference", { skip: turboRead
     assert.ok(r.bytes > 0 && r.bpp > 0);
     assert.match(r.label, /-quality \d+/);
     assert.ok(readFileSync(join(dir, "reference.norm.ppm")).subarray(0, 2).equals(Buffer.from("P6")), "the encoder read a binary PPM");
+  });
+});
+
+test("a codec failing on an image is reported, and the run carries on", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    // A cwebp that always fails, ahead of the real one on PATH.
+    const fakeBin = join(dir, "bin");
+    mkdirSync(fakeBin);
+    writeFileSync(join(fakeBin, "cwebp"), '#!/bin/sh\necho "simulated encoder error: unsupported input" >&2\nexit 1\n', { mode: 0o755 });
+    const images = join(dir, "images");
+    mkdirSync(images);
+    makeTestPng(join(images, "a.png"), 128, 96);
+    makeTestPng(join(images, "b.png"), 96, 128);
+    const csvPath = join(dir, "out.csv");
+    const htmlPath = join(dir, "out.html");
+    const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` };
+
+    const res = spawnSync(process.execPath, [CLI, images, "--target", "85", "--codecs", "jxl,webp", "--csv", csvPath, "--html", htmlPath], { encoding: "utf8", env });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /\| WebP +\| — +\| +failed \|/, "the failed codec has a row");
+    assert.match(res.stdout, /† WebP failed: simulated encoder error: unsupported input/);
+    assert.match(res.stdout, /Batch summary/, "the batch still completes");
+    assert.match(res.stderr, /WebP failed on a\.png/);
+
+    const lines = readFileSync(csvPath, "utf8").trim().split("\n");
+    assert.ok(lines.some((l) => /^a\.png,JPEG XL,-d [\d.]+,\d+,/.test(l)), "JPEG XL is still measured");
+    assert.ok(lines.some((l) => l.startsWith("a.png,WebP,") && l.endsWith(",simulated encoder error: unsupported input")));
+
+    const json = readFileSync(htmlPath, "utf8").match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
+    const names = JSON.parse(json).images[0].codecs.map((c) => c.name);
+    assert.deepEqual(names, ["JPEG XL"], "the report leaves the failed codec out");
+  });
+});
+
+test("in RD mode a failed target is reported and the curve keeps the others", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const fakeBin = join(dir, "bin");
+    mkdirSync(fakeBin);
+    writeFileSync(join(fakeBin, "cwebp"), '#!/bin/sh\necho "simulated encoder error" >&2\nexit 1\n', { mode: 0o755 });
+    const ref = join(dir, "a.png");
+    makeTestPng(ref, 128, 96);
+    const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` };
+
+    const res = spawnSync(process.execPath, [CLI, ref, "--rd", "75,85", "--codecs", "jxl,webp"], { encoding: "utf8", env });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /\| WebP +\| +failed \| +failed \| +n\/a \|/);
+    assert.match(res.stdout, /† WebP failed at 75: simulated encoder error/);
   });
 });

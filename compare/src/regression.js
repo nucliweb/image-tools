@@ -46,15 +46,19 @@ export function parseResultsCsv(text) {
   const iCodec = header.indexOf("codec");
   const iBytes = header.indexOf("bytes");
   const iScore = header.indexOf("ssimulacra2");
-  return lines.slice(1).map((line) => {
-    const cols = splitCsvLine(line);
-    return {
+  const iError = header.indexOf("error");
+  // A failed (image, codec) has no size; leaving it out makes the check report it
+  // as missing, rather than reading its empty bytes as an improvement.
+  return lines
+    .slice(1)
+    .map(splitCsvLine)
+    .filter((cols) => iError < 0 || !cols[iError])
+    .map((cols) => ({
       image: iImage >= 0 ? cols[iImage] : "",
       codec: cols[iCodec],
       bytes: Number(cols[iBytes]),
       ssimulacra2: Number(cols[iScore]),
-    };
-  });
+    }));
 }
 
 // A NUL separator cannot appear in a file or codec name, so keys never collide.

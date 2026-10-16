@@ -2,6 +2,16 @@ import { imageBdRates } from "./rd.js";
 
 const bySizeAscending = (a, b) => a.bytes - b.bytes;
 
+/** Measured results smallest first, then the codecs that failed on this image. */
+const measuredFirst = (results) => [
+  ...results.filter((r) => !r.failed).sort(bySizeAscending),
+  ...results.filter((r) => r.failed),
+];
+
+/** Footnote lines naming each failed codec and why it failed. */
+const failureNotes = (failures) =>
+  failures.length ? ["", ...failures.map((f) => `† ${f.name} failed${f.at ?? ""}: ${f.error}`)] : [];
+
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
@@ -50,7 +60,7 @@ function asciiTable(columns, rows) {
 
 /** Render results as an ASCII comparison table, smallest file first. */
 export function toComparisonTable(results, meta) {
-  const rows = [...results].sort(bySizeAscending);
+  const rows = measuredFirst(results);
   const columns = [
     { header: "Codec", align: "left" },
     { header: "Setting", align: "left" },
@@ -64,7 +74,10 @@ export function toComparisonTable(results, meta) {
     { header: "enc total", align: "right" },
     { header: "cpu total", align: "right" },
   ];
-  const body = rows.map((r) => [
+  const body = rows.map((r) =>
+    r.failed
+      ? [r.name, "—", "failed", ...Array(columns.length - 3).fill("—")]
+      : [
     r.name,
     r.label,
     formatBytes(r.bytes),
@@ -76,7 +89,8 @@ export function toComparisonTable(results, meta) {
     formatDuration(r.encodeCpuMs),
     formatDuration(r.totalEncodeWallMs),
     formatDuration(r.totalEncodeCpuMs),
-  ]);
+        ],
+  );
   const heading = [
     `Codec comparison — ${meta.reference} (${meta.width}×${meta.height})`,
     `Target: ssimulacra2 ${meta.target} (equal perceptual quality; compare size).`,
@@ -88,7 +102,8 @@ export function toComparisonTable(results, meta) {
   const footnote = rows.some((r) => r.reached === false)
     ? ["", "* target not reachable for this image (codec range exhausted); closest setting shown."]
     : [];
-  return [...heading, asciiTable(columns, body), ...footnote].join("\n");
+  const failures = failureNotes(rows.filter((r) => r.failed));
+  return [...heading, asciiTable(columns, body), ...footnote, ...failures].join("\n");
 }
 
 /** Render the per-codec aggregate over a batch of images as an ASCII table. */
@@ -103,7 +118,7 @@ export function toAggregateTable(rows, meta) {
   ];
   const body = rows.map((r) => [
     r.name,
-    r.avgBpp.toFixed(3),
+    r.avgBpp === null ? "n/a" : r.avgBpp.toFixed(3),
     String(r.wins),
     r.savingsPct === null ? "n/a" : `${r.savingsPct.toFixed(1)}%`,
     `${r.reached}/${r.count}`,
@@ -118,20 +133,36 @@ function csvField(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// The metric columns of each CSV, after the codec name and before the error.
+const SINGLE_FIELDS = [
+  (r) => csvField(r.label),
+  (r) => r.bytes,
+  (r) => r.bpp.toFixed(4),
+  (r) => r.ssimulacra2.toFixed(4),
+  (r) => r.dssim.toFixed(6),
+  (r) => r.iterations,
+  (r) => csvMs(r.encodeWallMs),
+  (r) => csvMs(r.encodeCpuMs),
+  (r) => csvMs(r.totalEncodeWallMs),
+  (r) => csvMs(r.totalEncodeCpuMs),
+];
+const BATCH_FIELDS = [...SINGLE_FIELDS.slice(0, 5), (r) => r.reached, ...SINGLE_FIELDS.slice(5)];
+
+/** One CSV row: the codec, its metrics (empty for a failed codec), and the error. */
+function csvRow(r, fields) {
+  const metrics = r.failed ? fields.map(() => "") : fields.map((f) => f(r));
+  return [csvField(r.name), ...metrics, r.failed ? csvField(r.error) : ""].join(",");
+}
+
 /** Render batch results as CSV, one row per (image, codec). */
 export function toBatchCsv(perImage) {
   const head =
     "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations," +
-    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms";
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error";
   const lines = [];
   for (const { image, results } of perImage) {
-    for (const r of [...results].sort(bySizeAscending)) {
-      lines.push(
-        `${csvField(image)},${csvField(r.name)},${csvField(r.label)},${r.bytes},${r.bpp.toFixed(4)},` +
-          `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.reached},${r.iterations},` +
-          `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
-          `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
-      );
+    for (const r of measuredFirst(results)) {
+      lines.push(`${csvField(image)},${csvRow(r, BATCH_FIELDS)}`);
     }
   }
   return [head, ...lines].join("\n");
@@ -139,18 +170,10 @@ export function toBatchCsv(perImage) {
 
 /** Render results as CSV, smallest file first. */
 export function toCsv(results) {
-  const rows = [...results].sort(bySizeAscending);
   const header =
     "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations," +
-    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms";
-  const body = rows.map(
-    (r) =>
-      `${csvField(r.name)},${csvField(r.label)},${r.bytes},${r.bpp.toFixed(4)},` +
-      `${r.ssimulacra2.toFixed(4)},${r.dssim.toFixed(6)},${r.iterations},` +
-      `${csvMs(r.encodeWallMs)},${csvMs(r.encodeCpuMs)},` +
-      `${csvMs(r.totalEncodeWallMs)},${csvMs(r.totalEncodeCpuMs)}`,
-  );
-  return [header, ...body].join("\n");
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error";
+  return [header, ...measuredFirst(results).map((r) => csvRow(r, SINGLE_FIELDS))].join("\n");
 }
 
 const formatBdRate = (rate) => (rate === null ? "n/a" : `${rate > 0 ? "+" : ""}${rate.toFixed(1)}%`);
@@ -172,7 +195,8 @@ export function toRdTable(imageRd, meta) {
     c.name,
     ...meta.targets.map((t) => {
       const p = c.points.find((point) => point.target === t);
-      return p ? `${p.bpp.toFixed(3)}${p.reached === false ? " *" : ""}` : "n/a";
+      if (!p) return "n/a";
+      return p.failed ? "failed" : `${p.bpp.toFixed(3)}${p.reached === false ? " *" : ""}`;
     }),
     c.id === meta.baselineId ? "baseline" : formatBdRate(rates.get(c.id)),
   ]);
@@ -185,7 +209,10 @@ export function toRdTable(imageRd, meta) {
   const footnote = unreached
     ? ["", "* target not reachable for this image (codec range exhausted); closest setting shown."]
     : [];
-  return [...heading, asciiTable(columns, body), ...footnote].join("\n");
+  const failures = failureNotes(
+    rows.flatMap((c) => c.points.filter((p) => p.failed).map((p) => ({ name: c.name, at: ` at ${p.target}`, error: p.error }))),
+  );
+  return [...heading, asciiTable(columns, body), ...footnote, ...failures].join("\n");
 }
 
 /** Render the mean BD-rate per codec over a batch of images as an ASCII table. */
@@ -209,15 +236,16 @@ export function toRdAggregateTable(rows, meta) {
 
 /** Render rate-distortion results as CSV, one row per (image, codec, target). */
 export function toRdCsv(perImageRd) {
-  const head = "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations";
+  const head = "image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations,error";
   const lines = [];
   for (const { image, codecs } of perImageRd) {
     for (const c of codecs) {
       for (const p of c.points) {
-        lines.push(
-          `${csvField(image)},${csvField(c.name)},${p.target},${csvField(p.label)},${p.bytes},` +
-            `${p.bpp.toFixed(4)},${p.ssimulacra2.toFixed(4)},${p.dssim.toFixed(6)},${p.reached},${p.iterations}`,
-        );
+        const metrics = p.failed
+          ? ",,,,,,,"
+          : `,${csvField(p.label)},${p.bytes},${p.bpp.toFixed(4)},${p.ssimulacra2.toFixed(4)},` +
+            `${p.dssim.toFixed(6)},${p.reached},${p.iterations}`;
+        lines.push(`${csvField(image)},${csvField(c.name)},${p.target}${metrics},${p.failed ? csvField(p.error) : ""}`);
       }
     }
   }

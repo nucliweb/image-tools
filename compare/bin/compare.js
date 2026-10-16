@@ -6,7 +6,7 @@ import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS, resolveCodecIds } from "../src/codecs.js";
 import { findQualityForTarget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
-import { run, resolveCommand } from "../src/exec.js";
+import { run, resolveCommand, failureReason } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
 import { sweepCodec } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
@@ -173,7 +173,17 @@ function main() {
       for (const id of ids) {
         const codec = CODECS[id];
         process.stderr.write(`  → ${codec.name} …\n`);
-        const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
+        let op;
+        try {
+          op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
+        } catch (err) {
+          // One codec failing on one image (an unsupported input, a crash) is a
+          // result to report, not a reason to abandon the whole run.
+          const error = failureReason(err);
+          process.stderr.write(`  ! ${codec.name} failed on ${basename(image)}: ${error}\n`);
+          results.push({ id, name: codec.name, failed: true, error });
+          continue;
+        }
         results.push(op);
         if (!values.html) continue;
 
@@ -191,12 +201,17 @@ function main() {
           encodeCpuMs: op.encodeCpuMs,
         };
         process.stderr.write(`  ~ ${codec.name} sweep …\n`);
-        const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
-        reportCodecs.push({ id, name: codec.name, points, preview });
+        try {
+          const { points } = sweepCodec(codec, refNorm, dims.pixels, workdir, effort);
+          reportCodecs.push({ id, name: codec.name, points, preview });
+        } catch (err) {
+          process.stderr.write(`  ! ${codec.name} sweep failed on ${basename(image)}, left out of the report: ${failureReason(err)}\n`);
+        }
       }
 
       perImage.push({ image: basename(image), width: dims.width, height: dims.height, results });
-      if (values.html) {
+      // An image on which every codec failed has nothing to show in the report.
+      if (values.html && reportCodecs.length > 0) {
         report.images.push({
           name: basename(image),
           width: dims.width,
@@ -261,8 +276,14 @@ function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baseline
       const codec = CODECS[id];
       process.stderr.write(`  → ${codec.name} @ ${targets.join(", ")} …\n`);
       const points = targets.map((target) => {
-        const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
-        return { target, ...op };
+        try {
+          const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
+          return { target, ...op };
+        } catch (err) {
+          const error = failureReason(err);
+          process.stderr.write(`  ! ${codec.name} failed on ${basename(image)} at ${target}: ${error}\n`);
+          return { target, failed: true, error };
+        }
       });
       return { id, name: codec.name, points };
     });
