@@ -197,3 +197,20 @@ test("HEIC 4:4:4 encodes full-resolution chroma", { skip: heicReady ? false : "c
     assert.match(info.stdout, /4:4:4/, "heif-info reports 4:4:4 chroma");
   });
 });
+
+// rav1e is an optional libavif encoder; Homebrew's avifenc ships without it.
+const rav1eReady = (() => {
+  if (!toolsPresent(["avifenc", "avifdec", ...METRICS])) return false;
+  const v = spawnSync(resolveCommand("avifenc"), ["--version"], { encoding: "utf8" });
+  return /rav1e \[enc/.test(`${v.stdout}${v.stderr}`);
+})();
+
+test("AVIF rav1e encodes with libavif's rav1e encoder", { skip: rav1eReady ? false : "avifenc without rav1e" }, () => {
+  withWorkdir((dir) => {
+    const ref = join(dir, "ref.png");
+    makeTestPng(ref, 128, 96);
+    const r = findQualityForTarget(CODECS["avif-rav1e"], ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+    assert.ok(r.bytes > 0 && r.bpp > 0);
+    assert.equal(r.name, "AVIF rav1e");
+  });
+});
