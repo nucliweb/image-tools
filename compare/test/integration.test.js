@@ -214,3 +214,16 @@ test("AVIF rav1e encodes with libavif's rav1e encoder", { skip: rav1eReady ? fal
     assert.equal(r.name, "AVIF rav1e");
   });
 });
+
+const turboReady = toolsPresent(["cjpeg", "vips", "djpegli", ...METRICS]);
+
+test("libjpeg-turbo encodes from a PPM copy of the reference", { skip: turboReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const ref = join(dir, "ref.png");
+    makeTestPng(ref, 128, 96);
+    const r = findQualityForTarget(CODECS["jpeg-turbo"], ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+    assert.ok(r.bytes > 0 && r.bpp > 0);
+    assert.match(r.label, /-quality \d+/);
+    assert.ok(readFileSync(join(dir, "reference.norm.ppm")).subarray(0, 2).equals(Buffer.from("P6")), "the encoder read a binary PPM");
+  });
+});

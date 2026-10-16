@@ -268,6 +268,32 @@ On photographs and the texture rav1e is within a few percent of aom, slightly sm
 
 **References.** [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-c`: "Possible values depend on the codecs enabled at build time"); [rav1e](https://github.com/xiph/rav1e); [libaom](https://aomedia.googlesource.com/aom/).
 
+### libjpeg-turbo (`jpeg-turbo`)
+
+**What it changes.** [libjpeg-turbo](https://libjpeg-turbo.org/) is the JPEG library most software links against, and the baseline the other two JPEG encoders improve on: [mozjpeg](https://github.com/mozilla/mozjpeg) is "a patch for libjpeg-turbo" that adds trellis quantization, optimized progressive scans and new quantization tables, and [jpegli](https://github.com/google/jpegli) is a libjpeg62-compatible encoder with adaptive quantization and floating-point color conversion. All three write ordinary JPEG. This variant runs libjpeg-turbo's own `cjpeg` with mozjpeg's command line (`-quality`, 1..100). Debian's `cjpeg` 2.1 does not read PNG (PNG input arrived in 3.2), so the reference is handed over as a binary PPM, converted once with `vips` (lossless for 8-bit RGB) and outside the timed encode.
+
+**What it is worth on the demo images** (target ssimulacra2 90, image 0.2.0, each encoder at its defaults):
+
+| Image | libjpeg-turbo | mozjpeg | jpegli |
+| --- | --- | --- | --- |
+| `kodim04.png` (photo) | 166.6 KB, 89.6 | 196.7 KB, 90.1 (+18%) | **127.6 KB**, 90.0 (−23%) |
+| `kodim19.png` (photo) | 182.6 KB, 90.4 | 208.0 KB, 89.9 (+14%) | **143.6 KB**, 90.0 (−21%) |
+| `kodim23.png` (photo) | 153.0 KB, 90.3 | 127.3 KB, 89.9 (−17%) | **94.8 KB**, 90.2 (−38%) |
+| `forest-leaves.png` (texture) | 919.6 KB, 90.3 | 1093.7 KB, 89.6 (+19%) | **724.5 KB**, 89.9 (−21%) |
+| `corporate-memphis.png` (illustration) | 127.8 KB, 88.1 * | 97.8 KB, 89.6 | **78.5 KB**, 89.9 |
+| `report-ui.png` (UI, text) | 302.8 KB, 78.8 * | 213.3 KB, 90.2 | **165.5 KB**, 89.9 |
+| `pipeline-diagram.png` (diagram) | 177.5 KB, 75.7 * | 176.5 KB, 89.9 | **111.0 KB**, 89.3 * |
+
+jpegli is the smallest on every image, 21–45% below libjpeg-turbo. libjpeg-turbo cannot reach the target on the three graphics images even at `-quality 100`. And mozjpeg, the "improved" encoder, is *larger* than plain libjpeg-turbo on three photographs and the texture.
+
+**Why mozjpeg loses on photographs: its defaults, not its compression.** libjpeg-turbo always subsamples color 4:2:0 by default. mozjpeg chooses by quality: 4:4:4 at `-quality` 90 and above, 4:2:2 (`2x1`) from 80, because "for some images chroma subsampling significantly degrades color quality, making it impossible to achieve high visual quality regardless of quality setting" ([`rdswitch.c`](https://github.com/mozilla/mozjpeg/blob/master/rdswitch.c)). Reaching ssimulacra2 90 takes `-quality` 95–99, so mozjpeg encodes 4:4:4, which reaches the target on text and graphics but costs bytes on photographs, where 4:2:0 is enough. Searched to the same target with the subsampling forced equal (`-sample 2x2` on both), mozjpeg is smaller than libjpeg-turbo on all seven images (−4% to −24%), so its encoder improvements are real; at 4:4:4 and these high settings the result is mixed (smaller on the illustration and the diagram, 15–28% larger on the photographs, the texture and the UI screenshot).
+
+**Takeaway.** For JPEG at high quality the subsampling default decides more than the encoder, so compare encoders at matched settings before drawing conclusions. jpegli wins at its defaults across all content here, and is about as fast as libjpeg-turbo (both under 40 ms per encode, against 80–550 ms for mozjpeg).
+
+**Using it.** `cjpeg -quality N` (add `-sample 1x1` for 4:4:4); libjpeg-turbo 3.2 reads PNG directly, earlier releases need PPM, BMP, GIF or Targa.
+
+**References.** [libjpeg-turbo](https://libjpeg-turbo.org/) and its [`usage.txt`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/doc/usage.txt) (default subsampling 2x2, "4:2:0"); [mozjpeg](https://github.com/mozilla/mozjpeg) ("a strict superset of libjpeg-turbo's functionality") and its quality-dependent subsampling in [`rdswitch.c`](https://github.com/mozilla/mozjpeg/blob/master/rdswitch.c); [jpegli](https://github.com/google/jpegli) (adaptive dead-zone quantization).
+
 ## Size-regression gate
 
 CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) versus
