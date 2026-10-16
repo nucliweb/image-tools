@@ -9,6 +9,7 @@ const PALETTE = {
   "webp-sharp": "#67e8f9",
   jpegli: "#d97706",
   mozjpeg: "#dc2626",
+  "jpeg-turbo": "#fca5a5",
   heic: "#7c3aed",
   "heic-444": "#c4b5fd",
 };

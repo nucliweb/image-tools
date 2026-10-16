@@ -136,6 +136,11 @@ CODECS["heic-444"] = variant(CODECS.heic, { id: "heic-444", name: "HEIC 4:4:4", 
 // rav1e when libavif was built with it (avifenc --version lists the encoders).
 CODECS["avif-rav1e"] = variant(CODECS.avif, { id: "avif-rav1e", name: "AVIF rav1e", extraArgs: ["-c", "rav1e"] });
 
+// Plain libjpeg-turbo, the library mozjpeg forked: the same cjpeg command line
+// with mozjpeg's improvements absent. Debian's cjpeg 2.1 does not read PNG, so the
+// reference is handed over as PPM (inputExt), converted once outside the timing.
+CODECS["jpeg-turbo"] = { ...CODECS.mozjpeg, id: "jpeg-turbo", name: "libjpeg-turbo", encoder: "cjpeg", inputExt: "ppm" };
+
 export const DEFAULT_CODECS = ["jxl", "avif", "webp", "jpegli", "mozjpeg", "heic"];
 
 /**

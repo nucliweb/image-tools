@@ -1,10 +1,22 @@
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { run, runTimed, resolveCommand } from "./exec.js";
 import { buildEncodeArgs } from "./codecs.js";
 import { ssimulacra2, dssim } from "./metrics.js";
 import { searchForTarget } from "./search.js";
 import { pngDimensions, writeStrippedPng } from "./image.js";
+
+/**
+ * The file a codec's encoder reads: the reference PNG itself, or, for a codec that
+ * declares another inputExt (an encoder without PNG support), a lossless copy in
+ * that format next to it, converted once with vips and reused across encodes.
+ */
+export function encoderInput(codec, referencePng) {
+  if (!codec.inputExt) return referencePng;
+  const converted = referencePng.replace(/\.png$/i, "") + `.${codec.inputExt}`;
+  if (!existsSync(converted)) run(resolveCommand("vips"), ["copy", referencePng, converted]);
+  return converted;
+}
 
 /**
  * Encode the reference at a given knob, decode back to PNG, strip the decoded
@@ -19,7 +31,7 @@ export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = ""
   const decodedRaw = join(workdir, `${codec.id}${tag}.dec.raw.png`);
   const decodedPng = join(workdir, `${codec.id}${tag}.dec.png`);
 
-  const timing = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, referencePng, encoded, knob, effort));
+  const timing = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, encoderInput(codec, referencePng), encoded, knob, effort));
   run(resolveCommand(codec.decoder), codec.decodeArgs(encoded, decodedRaw));
   writeStrippedPng(decodedRaw, decodedPng);
 
@@ -54,7 +66,7 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, eff
   const wall = [];
   const cpu = [];
   for (let i = 0; i < runs; i++) {
-    const t = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, referencePng, encoded, knob, effort));
+    const t = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, encoderInput(codec, referencePng), encoded, knob, effort));
     wall.push(t.wallMs);
     cpu.push(t.cpuMs);
   }

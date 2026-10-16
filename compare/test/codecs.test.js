@@ -57,3 +57,12 @@ test("avif-rav1e is AVIF encoded by rav1e instead of aom, and keeps AVIF's speed
   assert.deepEqual(buildEncodeArgs(CODECS["avif-rav1e"], "in", "out", 30, 9), ["-s", "1", "-c", "rav1e", "--min", "30", "--max", "30", "in", "out"]);
   assert.ok(!DEFAULT_CODECS.includes("avif-rav1e"));
 });
+
+test("jpeg-turbo is plain libjpeg-turbo cjpeg with mozjpeg's command line, fed a PPM", () => {
+  const turbo = CODECS["jpeg-turbo"];
+  assert.equal(turbo.encoder, "cjpeg");
+  assert.equal(turbo.inputExt, "ppm");
+  assert.deepEqual(buildEncodeArgs(turbo, "in.ppm", "out", 85, 9), ["-quality", "85", "-outfile", "out", "in.ppm"]);
+  assert.equal(turbo.decoder, CODECS.mozjpeg.decoder);
+  assert.ok(!DEFAULT_CODECS.includes("jpeg-turbo"));
+});
