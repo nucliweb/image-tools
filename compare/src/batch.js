@@ -43,10 +43,13 @@ export function aggregate(perImage, { baselineId } = {}) {
   const winsById = new Map();
 
   for (const { results } of perImage) {
-    const winner = results.reduce((best, r) => (!best || r.bytes < best.bytes ? r : best), null);
+    // A codec that failed on an image counts as an attempt, but has no size to
+    // average, win with or compare.
+    const measured = results.filter((r) => !r.failed);
+    const winner = measured.reduce((best, r) => (!best || r.bytes < best.bytes ? r : best), null);
     if (winner) winsById.set(winner.id, (winsById.get(winner.id) || 0) + 1);
 
-    const baseline = baselineId ? results.find((r) => r.id === baselineId) : null;
+    const baseline = baselineId ? measured.find((r) => r.id === baselineId) : null;
 
     for (const r of results) {
       let entry = byId.get(r.id);
@@ -54,8 +57,9 @@ export function aggregate(perImage, { baselineId } = {}) {
         entry = { id: r.id, name: r.name, bpps: [], savings: [], reached: 0, count: 0 };
         byId.set(r.id, entry);
       }
-      entry.bpps.push(r.bpp);
       entry.count += 1;
+      if (r.failed) continue;
+      entry.bpps.push(r.bpp);
       if (r.reached) entry.reached += 1;
       if (baseline && baseline.bytes > 0) {
         entry.savings.push((1 - r.bytes / baseline.bytes) * 100);
@@ -67,11 +71,11 @@ export function aggregate(perImage, { baselineId } = {}) {
     .map((e) => ({
       id: e.id,
       name: e.name,
-      avgBpp: mean(e.bpps),
+      avgBpp: e.bpps.length ? mean(e.bpps) : null,
       savingsPct: e.savings.length ? mean(e.savings) : null,
       wins: winsById.get(e.id) || 0,
       reached: e.reached,
       count: e.count,
     }))
-    .sort((a, b) => a.avgBpp - b.avgBpp);
+    .sort((a, b) => (a.avgBpp ?? Infinity) - (b.avgBpp ?? Infinity));
 }

@@ -31,6 +31,8 @@ bpp, how many images each codec wins (smallest file), and mean size savings vers
 mozjpeg. A codec that cannot land within tolerance of the target for an image (its
 range is exhausted) is marked with `*`.
 
+A codec that fails on an image (its encoder rejects the input or crashes) does not stop the run: its row reads `failed`, a `†` note below the table gives the encoder's error, the CSV keeps the row with empty metrics and the message in its `error` column, and the batch summary, BD-rate and HTML report leave it out (the report's summary shows on how many images each codec was measured, and only one measured on all of them is marked best).
+
 Options:
 
 | Flag | Default | Meaning |
@@ -300,7 +302,7 @@ CI fails if a codec's **bytes at equal quality** grow beyond a tolerance (2%) ve
 a committed baseline (`demos/baseline.json`), so a change that quietly makes a codec's
 output larger is caught. The baseline also records each codec's achieved ssimulacra2
 score, and a drop of more than 0.5 points fails too, so a file cannot pass as smaller
-by settling at a lower quality. Both are deterministic given the pinned codec versions
+by settling at a lower quality. A codec that failed on an image counts as missing, which fails the check too. Both are deterministic given the pinned codec versions
 in the image; timing is never gated.
 
 The check also fails, without comparing anything, when the run's target differs from

@@ -52,3 +52,25 @@ test("aggregate computes avg bpp, wins, savings and reached, sorted by avg bpp",
   assert.equal(moz.reached, 1); // reached target in only one image
   assert.equal(moz.savingsPct, 0); // baseline vs itself
 });
+
+test("aggregate leaves failed results out of the averages, wins and savings", () => {
+  const rows = aggregate(
+    [
+      ...perImage,
+      {
+        image: "three.png",
+        results: [
+          { id: "jxl", name: "JPEG XL", failed: true, error: "boom" },
+          { id: "mozjpeg", name: "mozjpeg", bytes: 300, bpp: 3.0, reached: true },
+        ],
+      },
+    ],
+    { baselineId: "mozjpeg" },
+  );
+  const jxl = rows.find((r) => r.id === "jxl");
+  assert.equal(jxl.avgBpp, 1.25, "the failed image does not count towards the average");
+  assert.equal(jxl.savingsPct, 45);
+  assert.equal(jxl.reached, 2);
+  assert.equal(jxl.count, 3, "but it counts as an attempt, so reached shows 2/3");
+  assert.equal(rows.find((r) => r.id === "mozjpeg").wins, 1, "mozjpeg wins the image jxl failed on");
+});
