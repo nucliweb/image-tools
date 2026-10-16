@@ -5,6 +5,7 @@ const PALETTE = {
   jxl: "#4f46e5",
   avif: "#059669",
   webp: "#0891b2",
+  "webp-sharp": "#67e8f9",
   jpegli: "#d97706",
   mozjpeg: "#dc2626",
   heic: "#7c3aed",

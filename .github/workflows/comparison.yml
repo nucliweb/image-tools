@@ -45,7 +45,8 @@ jobs:
         run: |
           TARGET="${{ github.event.inputs.target || '90' }}"
           EFFORT="${{ github.event.inputs.effort || '' }}"
-          BASE="compare-codecs compare/demos/images --target $TARGET"
+          # Every codec, opt-in variants included, so the weekly report shows them too.
+          BASE="compare-codecs compare/demos/images --target $TARGET --codecs all"
           [ -n "$EFFORT" ] && BASE="$BASE --effort $EFFORT"
           # One run prints the table and writes the CSV and the HTML report.
           docker run --rm -v "$PWD:/work" -w /work --entrypoint bash image-tools:ci -c \

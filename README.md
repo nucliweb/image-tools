@@ -68,7 +68,8 @@ node compare/bin/compare.js my-image.png --target 90 --html report.html
 compare-codecs <image-or-dir...> [options]
 
   -t, --target <n>          Target ssimulacra2 score (default: 90)
-  -c, --codecs <list>       Comma-separated: jxl,avif,webp,jpegli,mozjpeg,heic (default: all)
+  -c, --codecs <list>       Comma-separated (default: jxl,avif,webp,jpegli,mozjpeg,heic); opt-in
+                            variants: webp-sharp; "all" runs every codec and variant
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
