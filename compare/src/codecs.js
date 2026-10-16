@@ -136,6 +136,10 @@ CODECS["heic-444"] = variant(CODECS.heic, { id: "heic-444", name: "HEIC 4:4:4", 
 // rav1e when libavif was built with it (avifenc --version lists the encoders).
 CODECS["avif-rav1e"] = variant(CODECS.avif, { id: "avif-rav1e", name: "AVIF rav1e", extraArgs: ["-c", "rav1e"] });
 
+// SVT-AV1 encodes 4:2:0 only ("Only support 420 now") and fails on avifenc's 4:4:4
+// default for PNG input, so the variant asks for 4:2:0 explicitly.
+CODECS["avif-svt"] = variant(CODECS.avif, { id: "avif-svt", name: "AVIF SVT-AV1", extraArgs: ["-c", "svt", "-y", "420"] });
+
 // Plain libjpeg-turbo, the library mozjpeg forked: the same cjpeg command line
 // with mozjpeg's improvements absent. Debian's cjpeg 2.1 does not read PNG, so the
 // reference is handed over as PPM (inputExt), converted once outside the timing.

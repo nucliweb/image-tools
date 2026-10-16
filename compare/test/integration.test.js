@@ -198,12 +198,14 @@ test("HEIC 4:4:4 encodes full-resolution chroma", { skip: heicReady ? false : "c
   });
 });
 
-// rav1e is an optional libavif encoder; Homebrew's avifenc ships without it.
-const rav1eReady = (() => {
+// rav1e and SVT-AV1 are optional libavif encoders; Homebrew's avifenc ships with
+// neither, so their tests run only where avifenc --version lists them.
+function avifEncoderReady(name) {
   if (!toolsPresent(["avifenc", "avifdec", ...METRICS])) return false;
   const v = spawnSync(resolveCommand("avifenc"), ["--version"], { encoding: "utf8" });
-  return /rav1e \[enc/.test(`${v.stdout}${v.stderr}`);
-})();
+  return new RegExp(`${name} \\[enc`).test(`${v.stdout}${v.stderr}`);
+}
+const rav1eReady = avifEncoderReady("rav1e");
 
 test("AVIF rav1e encodes with libavif's rav1e encoder", { skip: rav1eReady ? false : "avifenc without rav1e" }, () => {
   withWorkdir((dir) => {
@@ -272,5 +274,17 @@ test("in RD mode a failed target is reported and the curve keeps the others", { 
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /\| WebP +\| +failed \| +failed \| +n\/a \|/);
     assert.match(res.stdout, /† WebP failed at 75: simulated encoder error/);
+  });
+});
+
+const svtReady = avifEncoderReady("svt");
+
+test("AVIF SVT-AV1 encodes 4:2:0 with libavif's SVT-AV1 encoder", { skip: svtReady ? false : "avifenc without svt" }, () => {
+  withWorkdir((dir) => {
+    const ref = join(dir, "ref.png");
+    makeTestPng(ref, 128, 96);
+    const r = findQualityForTarget(CODECS["avif-svt"], ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+    assert.ok(r.bytes > 0 && r.bpp > 0);
+    assert.equal(r.name, "AVIF SVT-AV1");
   });
 });

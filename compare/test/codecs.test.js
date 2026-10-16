@@ -66,3 +66,9 @@ test("jpeg-turbo is plain libjpeg-turbo cjpeg with mozjpeg's command line, fed a
   assert.equal(turbo.decoder, CODECS.mozjpeg.decoder);
   assert.ok(!DEFAULT_CODECS.includes("jpeg-turbo"));
 });
+
+test("avif-svt is AVIF encoded by SVT-AV1, which only encodes 4:2:0", () => {
+  assert.deepEqual(buildEncodeArgs(CODECS["avif-svt"], "in", "out", 20, null), ["-c", "svt", "-y", "420", "--min", "20", "--max", "20", "in", "out"]);
+  assert.deepEqual(buildEncodeArgs(CODECS["avif-svt"], "in", "out", 20, 9), ["-s", "1", "-c", "svt", "-y", "420", "--min", "20", "--max", "20", "in", "out"]);
+  assert.ok(!DEFAULT_CODECS.includes("avif-svt"));
+});
