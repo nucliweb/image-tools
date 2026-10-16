@@ -184,3 +184,16 @@ test("WebP sharp YUV encodes with -sharp_yuv and decodes like WebP", { skip: web
     assert.match(r.label, /-q \d+/);
   });
 });
+
+const heicReady = toolsPresent(["heif-enc", "heif-convert", ...METRICS]);
+
+test("HEIC 4:4:4 encodes full-resolution chroma", { skip: heicReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const ref = join(dir, "ref.png");
+    makeTestPng(ref, 128, 96);
+    const r = findQualityForTarget(CODECS["heic-444"], ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+    assert.ok(r.bytes > 0 && r.bpp > 0);
+    const info = spawnSync(resolveCommand("heif-info"), [join(dir, "heic-444.heic")], { encoding: "utf8" });
+    assert.match(info.stdout, /4:4:4/, "heif-info reports 4:4:4 chroma");
+  });
+});

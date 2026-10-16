@@ -9,6 +9,7 @@ const PALETTE = {
   jpegli: "#d97706",
   mozjpeg: "#dc2626",
   heic: "#7c3aed",
+  "heic-444": "#c4b5fd",
 };
 
 /** Reduce the rich report (with file paths) to the JSON the page needs. */
