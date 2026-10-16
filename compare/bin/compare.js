@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { CODECS, DEFAULT_CODECS } from "../src/codecs.js";
+import { CODECS, DEFAULT_CODECS, resolveCodecIds } from "../src/codecs.js";
 import { findQualityForTarget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
 import { run, resolveCommand } from "../src/exec.js";
@@ -31,7 +31,9 @@ apples-to-apples. With more than one image it also prints a batch summary
 
 Options:
   -t, --target <n>          Target ssimulacra2 score (default: 90)
-  -c, --codecs <list>       Comma-separated: ${DEFAULT_CODECS.join(",")} (default: all)
+  -c, --codecs <list>       Comma-separated (default: ${DEFAULT_CODECS.join(",")}); opt-in
+                            variants: ${Object.keys(CODECS).filter((id) => !DEFAULT_CODECS.includes(id)).join(",")};
+                            "all" runs every codec and variant
       --tolerance <n>       Stop when within this of the target (default: 0.5)
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
@@ -106,11 +108,11 @@ function main() {
       process.exit(1);
     }
   }
-  const ids = values.codecs ? values.codecs.split(",").map((s) => s.trim()) : DEFAULT_CODECS;
-
-  const unknown = ids.filter((id) => !CODECS[id]);
-  if (unknown.length) {
-    console.error(`Unknown codec(s): ${unknown.join(", ")}. Known: ${Object.keys(CODECS).join(", ")}`);
+  let ids;
+  try {
+    ids = resolveCodecIds(values.codecs);
+  } catch (err) {
+    console.error(err.message);
     process.exit(1);
   }
 

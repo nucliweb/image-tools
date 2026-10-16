@@ -173,3 +173,14 @@ test("RD mode searches every codec at each target and rates it against the basel
     assert.ok(webp85, "a row for each target");
   });
 });
+
+test("WebP sharp YUV encodes with -sharp_yuv and decodes like WebP", { skip: webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const ref = join(dir, "ref.png");
+    makeTestPng(ref, 128, 96);
+    const r = findQualityForTarget(CODECS["webp-sharp"], ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+    assert.ok(r.bytes > 0 && r.bpp > 0);
+    assert.equal(r.name, "WebP sharp YUV");
+    assert.match(r.label, /-q \d+/);
+  });
+});

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CODECS, buildEncodeArgs } from "../src/codecs.js";
+import { CODECS, DEFAULT_CODECS, buildEncodeArgs, resolveCodecIds } from "../src/codecs.js";
 
 test("without an effort level, encode args are unchanged", () => {
   assert.deepEqual(buildEncodeArgs(CODECS.jxl, "in", "out", 0.57, null), ["in", "out", "-d", "0.57"]);
@@ -23,4 +23,25 @@ test("webp maps effort to -m on a 0..6 scale, before positionals", () => {
 test("codecs without an effort knob ignore the level", () => {
   assert.deepEqual(buildEncodeArgs(CODECS.mozjpeg, "in", "out", 96, 9), ["-quality", "96", "-outfile", "out", "in"]);
   assert.deepEqual(buildEncodeArgs(CODECS.jpegli, "in", "out", 0.9, 9), ["in", "out", "-d", "0.9"]);
+});
+
+test("webp-sharp is WebP with the sharp RGB->YUV conversion, and keeps WebP's effort knob", () => {
+  assert.deepEqual(buildEncodeArgs(CODECS["webp-sharp"], "in", "out", 97, null), ["-sharp_yuv", "-q", "97", "in", "-o", "out"]);
+  assert.deepEqual(buildEncodeArgs(CODECS["webp-sharp"], "in", "out", 97, 10), ["-m", "6", "-sharp_yuv", "-q", "97", "in", "-o", "out"]);
+  assert.equal(CODECS["webp-sharp"].decoder, CODECS.webp.decoder);
+});
+
+test("opt-in variants stay out of the default set", () => {
+  assert.ok(!DEFAULT_CODECS.includes("webp-sharp"));
+});
+
+test("resolveCodecIds reads the default set, an explicit list, or every codec", () => {
+  assert.deepEqual(resolveCodecIds(undefined), DEFAULT_CODECS);
+  assert.deepEqual(resolveCodecIds("jxl, webp-sharp"), ["jxl", "webp-sharp"]);
+  assert.deepEqual(resolveCodecIds("all"), Object.keys(CODECS));
+  assert.ok(resolveCodecIds("all").includes("webp-sharp"));
+});
+
+test("resolveCodecIds rejects unknown codecs and names the known ones", () => {
+  assert.throws(() => resolveCodecIds("jxl,webp2"), /Unknown codec\(s\): webp2\. Known: .*webp-sharp/);
 });

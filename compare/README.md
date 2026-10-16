@@ -36,7 +36,7 @@ Options:
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `-t, --target <n>` | `90` | Target ssimulacra2 score (higher is closer to the original) |
-| `-c, --codecs <list>` | all | Comma-separated subset of `jxl,avif,webp,jpegli,mozjpeg,heic` |
+| `-c, --codecs <list>` | the six formats | Comma-separated subset of `jxl,avif,webp,jpegli,mozjpeg,heic`, plus any [opt-in variant](#opt-in-variants); `all` runs every codec and variant |
 | `--tolerance <n>` | `0.5` | Stop searching once within this of the target |
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--effort <0..10>` | codec default | Matched encoder effort across codecs that have the knob (higher = slower) |
@@ -183,6 +183,38 @@ deliberate, comparable operating point:
 ```bash
 compare-codecs reference.png --target 90 --effort 9 --time-runs 3
 ```
+
+## Opt-in variants
+
+The default set compares six formats, one encoder configuration each. A variant is one of them with a single setting changed, so a comparison can isolate what that setting is worth on your images. Variants reuse the base codec's quality knob, decoder and effort mapping, and run only when named in `--codecs` (or with `--codecs all`), so the default comparison and the regression baseline are unaffected. The weekly comparison runs them all.
+
+```bash
+compare-codecs images/ --target 90 --codecs webp,webp-sharp
+```
+
+### WebP sharp YUV (`webp-sharp`)
+
+**What it changes.** Lossy WebP always stores color as YUV 4:2:0: brightness (Y) at full resolution and color (U, V) at half resolution in both directions, one color sample per 2×2 block of pixels ([chroma subsampling](https://en.wikipedia.org/wiki/Chroma_subsampling)). By default `cwebp` converts RGB to YUV and simply averages each block's color. On an edge between saturated colors, such as colored text or a thin line on a light background, that average is wrong for every pixel in the block, and once the decoder upsamples the color back, it bleeds across the edge and the edge darkens. `-sharp_yuv` instead adjusts Y, U and V together so that the image *after* upsampling is as close as possible to the original RGB. The bitstream is ordinary WebP, so every decoder reads it; only the encoder does more work.
+
+**What it is worth on the demo images** (target ssimulacra2 90, image 0.2.0):
+
+| Image | WebP | WebP sharp YUV |
+| --- | --- | --- |
+| `kodim04.png` (photo) | 169.7 KB, 89.8 | **150.6 KB**, 89.8 (−11%) |
+| `kodim19.png` (photo) | 169.8 KB, 90.0 | **165.0 KB**, 89.9 (−3%) |
+| `forest-leaves.png` (texture) | 735.8 KB, 89.5 | **657.9 KB**, 90.3 (−11%) |
+| `kodim23.png` (photo) | 137.1 KB, 89.0 * | 143.9 KB, **89.8** |
+| `corporate-memphis.png` (illustration) | 45.7 KB, 85.9 * | 45.8 KB, **89.5** |
+| `report-ui.png` (UI, text) | 114.8 KB, 77.4 * | 123.4 KB, **89.4** * |
+| `pipeline-diagram.png` (diagram) | 61.6 KB, 73.5 * | 70.9 KB, **86.2** * |
+
+Where both reach the target, sharp YUV is 3–11% smaller at the same quality. Where plain WebP cannot reach it, even at `-q 100`, sharp YUV raises the ceiling, from 77 to 89 on the UI screenshot; the extra bytes buy quality that was unreachable before, so those rows are not a size comparison. Encoding takes about 1.2–2× as long.
+
+**Takeaway.** Sharp YUV is close to a free improvement for lossy WebP, and most valuable on graphics, text and saturated edges. It does not remove the 4:2:0 limit: for UI and diagrams, a format that keeps full-resolution color (AVIF, which `avifenc` encodes as 4:4:4 by default, or JPEG XL) still does better.
+
+**Using it.** `cwebp -sharp_yuv`; in [sharp](https://sharp.pixelplumbing.com/api-output/#webp), `webp({ smartSubsample: true })` ("use high quality chroma subsampling", off by default); for 4:2:0 AVIF, `avifenc --sharpyuv`.
+
+**References.** [`cwebp` documentation](https://developers.google.com/speed/webp/docs/cwebp) (`-sharp_yuv`: "Use more accurate and sharper RGB->YUV conversion", slower than the default); [libwebp's `sharpyuv` library](https://github.com/webmproject/libwebp/tree/main/sharpyuv), which `libavif` also uses.
 
 ## Size-regression gate
 

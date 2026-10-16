@@ -113,7 +113,38 @@ export const CODECS = {
   },
 };
 
+/**
+ * Opt-in variants: a codec already in the set with one setting changed, so a
+ * comparison can isolate what that setting is worth. They reuse the base codec's
+ * knob, decoder and effort mapping, and run only when named in --codecs (or with
+ * --codecs all), so the default comparison and the regression baseline stay put.
+ */
+function variant(base, { id, name, extraArgs }) {
+  return { ...base, id, name, encodeArgs: (input, output, knob) => [...extraArgs, ...base.encodeArgs(input, output, knob)] };
+}
+
+// cwebp's default RGB->YUV conversion averages each 2x2 block's chroma, which
+// bleeds and darkens saturated edges (colored text, thin lines); -sharp_yuv
+// solves for the luma and chroma that reconstruct the RGB best after upsampling.
+CODECS["webp-sharp"] = variant(CODECS.webp, { id: "webp-sharp", name: "WebP sharp YUV", extraArgs: ["-sharp_yuv"] });
+
 export const DEFAULT_CODECS = ["jxl", "avif", "webp", "jpegli", "mozjpeg", "heic"];
+
+/**
+ * Resolve a --codecs value to codec ids: the default set when absent, every codec
+ * (opt-in variants included) for "all", or the comma-separated list. Throws on an
+ * unknown id, naming the known ones.
+ */
+export function resolveCodecIds(value) {
+  if (value === undefined) return DEFAULT_CODECS;
+  if (value.trim() === "all") return Object.keys(CODECS);
+  const ids = value.split(",").map((s) => s.trim());
+  const unknown = ids.filter((id) => !CODECS[id]);
+  if (unknown.length) {
+    throw new Error(`Unknown codec(s): ${unknown.join(", ")}. Known: ${Object.keys(CODECS).join(", ")}`);
+  }
+  return ids;
+}
 
 /** Codecs that expose an effort/speed knob, so --effort applies to them. */
 export const EFFORT_CODECS = Object.values(CODECS)
