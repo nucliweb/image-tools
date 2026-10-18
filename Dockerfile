@@ -74,14 +74,15 @@ RUN git init -q flip \
     && install -Dm755 flip/build/flip -t /out/bin/
 
 # --- butteraugli: standalone (redundant with ssimulacra2, included on request)-
+# Pinned like the other source builds, so a failure is a real breakage and fails
+# the build rather than shipping an image without it.
 ARG BUTTERAUGLI_REF=71b18b636b9c7d1ae0c1d3730b85b3c127eb4511
 RUN git init -q butteraugli \
     && git -C butteraugli fetch -q --depth 1 https://github.com/google/butteraugli.git ${BUTTERAUGLI_REF} \
     && git -C butteraugli checkout -q FETCH_HEAD \
     && cd butteraugli/butteraugli \
     && g++ -O3 -std=c++11 -I.. butteraugli.cc butteraugli_main.cc \
-         -o /out/bin/butteraugli -lpng -ljpeg \
-    || echo "butteraugli build failed (optional) — continuing"
+         -o /out/bin/butteraugli -lpng -ljpeg
 
 # --- mozjpeg: trellis-optimized JPEG encoder (cjpeg, not in apt) --------------
 # Installed as `mozjpeg-cjpeg` so it does not collide with libjpeg-turbo's cjpeg.
