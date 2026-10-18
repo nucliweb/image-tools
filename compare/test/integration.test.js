@@ -121,6 +121,33 @@ test("sweepCodec builds a rate-distortion curve sorted by quality", { skip: jxlR
   });
 });
 
+// The remaining default codecs: each one searched to a real target, checked by the
+// file its encoder wrote (format signature) and the knob it reports.
+const isJpeg = (buf) => buf.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
+const isoBrand = (buf) => (buf.subarray(4, 8).toString("latin1") === "ftyp" ? buf.subarray(8, 12).toString("latin1") : null);
+const DEFAULT_CASES = [
+  { id: "avif", tools: ["avifenc", "avifdec"], label: /^--min\/max \d+$/, format: (buf) => isoBrand(buf) === "avif" },
+  { id: "jpegli", tools: ["cjpegli", "djpegli"], label: /^-d [\d.]+$/, format: isJpeg },
+  { id: "mozjpeg", tools: [CODECS.mozjpeg.encoder, "djpegli"], label: /^-quality \d+$/, format: isJpeg },
+  { id: "heic", tools: ["heif-enc", "heif-convert"], label: /^-q \d+$/, format: (buf) => ["heic", "mif1"].includes(isoBrand(buf)) },
+];
+
+for (const { id, tools, label, format } of DEFAULT_CASES) {
+  const codec = CODECS[id];
+  test(`searches ${codec.name} to a real perceptual target`, { skip: toolsPresent([...tools, ...METRICS]) ? false : "codecs not on PATH" }, () => {
+    withWorkdir((dir) => {
+      const ref = join(dir, "ref.png");
+      makeTestPng(ref, 128, 96);
+      const r = findQualityForTarget(codec, ref, 85, dir, { tolerance: 0.5, maxIterations: 8 });
+      assert.ok(r.bytes > 0 && r.bpp > 0);
+      assert.ok(Number.isFinite(r.ssimulacra2) && Number.isFinite(r.dssim));
+      assert.ok(r.reached ? Math.abs(r.ssimulacra2 - 85) <= 1.5 : true, "near the target unless the range was exhausted");
+      assert.match(r.label, label);
+      assert.ok(format(readFileSync(join(dir, `${id}.${codec.ext}`))), `the encoder wrote a ${codec.name} file`);
+    });
+  });
+}
+
 const CLI = fileURLToPath(new URL("../bin/compare.js", import.meta.url));
 const bd = (rate) => (rate === null ? "n/a" : `${rate > 0 ? "+" : ""}${rate.toFixed(1)}%`);
 
