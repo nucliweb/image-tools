@@ -72,7 +72,7 @@ For each image it prints the bpp each codec needs at every target, and its **BD-
 +---------+---------+---------+---------+---------+---------+--------------------+
 ```
 
-That is `cid22-friends.png` in the Docker image (0.4.0). A `*` marks a target the codec could not reach (its range is exhausted), as in the single-target table; the curve uses the quality the codec actually reached there, not the target.
+That is `cid22-friends.png` in the Docker image (0.4.0). AVIF needs the fewest bits from 70 to 85, and JPEG XL is smaller from 90 up, so a single-target run at the default 90 and one at 70 name different winners. Jake Archibald's [JPEG XL vs AVIF for web use-cases](https://jakearchibald.com/2026/jpeg-xl-vs-avif/) finds the same pattern across his photographs: AVIF ahead at ssimulacra2 70, with JPEG XL closing the gap at very high quality. A `*` marks a target the codec could not reach (its range is exhausted), as in the single-target table; the curve uses the quality the codec actually reached there, not the target.
 
 BD-rate (the Bjøntegaard delta rate) is the average difference in bits at equal quality across the range both curves cover: `-30%` means the codec needs, on average, 30% fewer bits than the baseline for the same ssimulacra2 score. Rate is interpolated piecewise-linearly in the log domain between the measured points, rather than with the classic cubic fit, so it stays well-behaved with few targets and never overshoots. A codec whose curve does not overlap the baseline's (for example, one pinned at its range bound at every target) shows `n/a`.
 
@@ -192,6 +192,8 @@ deliberate, comparable operating point:
 compare-codecs reference.png --target 90 --effort 9 --time-runs 3
 ```
 
+Effort moves sizes as well as times, and not equally across codecs, so a ranking at the defaults is not a ranking at maximum effort. [JPEG XL vs AVIF for web use-cases](https://jakearchibald.com/2026/jpeg-xl-vs-avif/) compares at each encoder's maximum effort (`avifenc -s 0`) and finds that "libjxl's higher efforts are much slower, use a lot more memory, and barely improve the result"; read results at the defaults as a comparison of the presets most tools ship with.
+
 ## Opt-in variants
 
 The default set compares six formats, one encoder configuration each. A variant is one of them with a single setting changed, so a comparison can isolate what that setting is worth on your images. Variants reuse the base codec's quality knob, decoder and effort mapping, and run only when named in `--codecs` (or with `--codecs all`), so the default comparison and the regression baseline are unaffected. The weekly comparison runs them all.
@@ -298,7 +300,7 @@ At matched 4:2:0, SVT-AV1 and aom trade places on the photographs (+15% on the p
 
 **Using it.** `avifenc -c svt -y 420`; with odd dimensions, crop or pad to even first.
 
-**References.** [SVT-AV1](https://gitlab.com/AOMediaCodec/SVT-AV1) and its [`Parameters.md`](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md) (`--color-format`: "only yuv420 is supported at this time"); [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-y`, and `-c` per build).
+**References.** [JPEG XL vs AVIF for web use-cases](https://jakearchibald.com/2026/jpeg-xl-vs-avif/) (Jake Archibald, 2026: "AVIF's 4:2:0 mode (half colour resolution) shouldn't be your default", since it rarely reduces size and makes higher qualities harder to reach); [SVT-AV1](https://gitlab.com/AOMediaCodec/SVT-AV1) and its [`Parameters.md`](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md) (`--color-format`: "only yuv420 is supported at this time"); [`avifenc` manual](https://github.com/AOMediaCodec/libavif/blob/main/doc/avifenc.1.md) (`-y`, and `-c` per build).
 
 ### libjpeg-turbo (`jpeg-turbo`)
 
@@ -324,7 +326,7 @@ jpegli is the smallest on every image, 21–45% below libjpeg-turbo. libjpeg-tur
 
 **Using it.** `cjpeg -quality N` (add `-sample 1x1` for 4:4:4); libjpeg-turbo 3.2 reads PNG directly, earlier releases need PPM, BMP, GIF or Targa.
 
-**References.** [libjpeg-turbo](https://libjpeg-turbo.org/) and its [`usage.txt`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/doc/usage.txt) (default subsampling 2x2, "4:2:0"); [mozjpeg](https://github.com/mozilla/mozjpeg) ("a strict superset of libjpeg-turbo's functionality") and its quality-dependent subsampling in [`rdswitch.c`](https://github.com/mozilla/mozjpeg/blob/master/rdswitch.c); [jpegli](https://github.com/google/jpegli) (adaptive dead-zone quantization).
+**References.** [JPEG XL vs AVIF for web use-cases](https://jakearchibald.com/2026/jpeg-xl-vs-avif/) (on 4:2:0 as a default, for AVIF; the JPEG measurements here point the same way); [libjpeg-turbo](https://libjpeg-turbo.org/) and its [`usage.txt`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/doc/usage.txt) (default subsampling 2x2, "4:2:0"); [mozjpeg](https://github.com/mozilla/mozjpeg) ("a strict superset of libjpeg-turbo's functionality") and its quality-dependent subsampling in [`rdswitch.c`](https://github.com/mozilla/mozjpeg/blob/master/rdswitch.c); [jpegli](https://github.com/google/jpegli) (adaptive dead-zone quantization).
 
 ## Size-regression gate
 
@@ -372,6 +374,6 @@ the closest bound (visible as `iters` hitting the max with the knob pinned).
 
 - Input is a PNG in sRGB. Ancillary chunks (ICC profile, chromaticities) are stripped
   before measuring, so wide-gamut inputs are treated as sRGB.
-- The search target metric is ssimulacra2; dssim is reported alongside for reference.
+- The search target metric is ssimulacra2; dssim is reported alongside for reference but does not drive the search. ssimulacra2 comes from Cloudinary (Jon Sneyers, also a JPEG XL author), "a perceptual image quality metric by the folks behind JPEG XL", as [JPEG XL vs AVIF for web use-cases](https://jakearchibald.com/2026/jpeg-xl-vs-avif/) puts it; it was tuned and validated on independent subjective scores (CID22, TID2013, KADID-10k, KonFiG-IQA), but a metric with no tie to any codec, such as [ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP), is a useful cross-check where JPEG XL and another format are close.
 - Codec versions affect the operating point. Use the Docker image for reproducible
   numbers; a native install will differ with its tool versions.
