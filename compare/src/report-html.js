@@ -15,10 +15,24 @@ const PALETTE = {
   "heic-444": "#c4b5fd",
 };
 
-/** Reduce the rich report (with file paths) to the JSON the page needs. */
+/**
+ * Reduce the rich report (with file paths) to the JSON the page needs. An RD
+ * report (from --rd) also carries its targets and the BD-rates the terminal
+ * prints, so the page shows the same numbers; its points are the equal-quality
+ * searches at each target rather than a fixed-knob sweep.
+ */
 function toClientData(report) {
+  const rd = report.rd
+    ? {
+        targets: report.rd.targets,
+        baselineId: report.rd.baselineId,
+        baselineName: report.rd.baselineName,
+        aggregate: report.rd.aggregate.map((r) => ({ id: r.id, name: r.name, meanBdRate: r.meanBdRate, rated: r.rated, count: r.count })),
+      }
+    : null;
   return {
     target: report.target,
+    rd,
     images: report.images.map((im) => ({
       name: im.name,
       width: im.width,
@@ -28,11 +42,13 @@ function toClientData(report) {
         id: c.id,
         name: c.name,
         color: PALETTE[c.id] || "#64748b",
+        bd: c.bdRate ?? null,
         points: c.points.map((p) => ({
           s: Number(p.ssimulacra2.toFixed(3)),
           bpp: Number(p.bpp.toFixed(4)),
           bytes: p.bytes,
           label: p.label,
+          ...(p.target === undefined ? {} : { t: p.target }),
         })),
         preview: {
           s: Number(c.preview.ssimulacra2.toFixed(2)),
@@ -112,6 +128,8 @@ const SCRIPT = [
   "let diffMode = false, diffAmp = 10; const diffCache = {};",
   "const $ = (s, r) => (r||document).querySelector(s);",
   "const fmtKB = b => (b/1024).toFixed(1) + ' KB';",
+  "const fmtBd = r => r==null ? 'n/a' : (r>0?'+':'')+r.toFixed(1)+'%';",
+  "const bdCell = c => c.id===DATA.rd.baselineId ? 'baseline' : fmtBd(c.bd);",
   "const fmtMs = m => m==null ? 'n/a' : (m<1000 ? Math.round(m)+' ms' : (m/1000).toFixed(2)+' s');",
   "function loadImg(src){ return new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.src=src; }); }",
   "async function computeDiff(origUri, codecUri, amp){",
@@ -132,6 +150,8 @@ const SCRIPT = [
   "function curImage(){ return DATA.images[imgIdx]; }",
   "function curCodec(){ return curImage().codecs.find(c => c.id === codecId) || curImage().codecs[0]; }",
   "function interp(points, s){",
+  "  // At an RD target, read that target's measured encode, as the terminal table does.",
+  "  const exact = points.find(p => p.t === s); if (exact) return exact;",
   "  const pts = points; if (s <= pts[0].s) return pts[0]; if (s >= pts[pts.length-1].s) return pts[pts.length-1];",
   "  for (let i=1;i<pts.length;i++){ if (s <= pts[i].s){ const a=pts[i-1], b=pts[i]; const t=(s-a.s)/(b.s-a.s||1);",
   "    return { bpp:a.bpp+(b.bpp-a.bpp)*t, bytes:Math.round(a.bytes+(b.bytes-a.bytes)*t) }; } }",
@@ -180,8 +200,8 @@ const SCRIPT = [
   "function renderReadout(){ const rows=curImage().codecs.map(c=>{ const it=interp(c.points, selS); return {c, bytes:it.bytes, bpp:it.bpp}; });",
   "  const min=Math.min.apply(null, rows.map(r=>r.bytes));",
   "  rows.sort((a,b)=>a.bytes-b.bytes);",
-  "  let h='<table class=readout><tr><th>codec</th><th>size @ ss2 '+selS.toFixed(1)+'</th><th>bpp</th></tr>';",
-  "  rows.forEach(r=>{ h+='<tr class='+(r.bytes===min?'win':'')+'><td><span class=swatch style=background:'+r.c.color+'></span>'+r.c.name+'</td><td>'+fmtKB(r.bytes)+'</td><td>'+r.bpp.toFixed(3)+'</td></tr>'; });",
+  "  let h='<table class=readout><tr><th>codec</th><th>size @ ss2 '+selS.toFixed(1)+'</th><th>bpp</th>'+(DATA.rd?'<th>BD-rate vs '+DATA.rd.baselineName+'</th>':'')+'</tr>';",
+  "  rows.forEach(r=>{ h+='<tr class='+(r.bytes===min?'win':'')+'><td><span class=swatch style=background:'+r.c.color+'></span>'+r.c.name+'</td><td>'+fmtKB(r.bytes)+'</td><td>'+r.bpp.toFixed(3)+'</td>'+(DATA.rd?'<td>'+bdCell(r.c)+'</td>':'')+'</tr>'; });",
   "  h+='</table>'; $('#readout').innerHTML=h; $('#qval').textContent=selS.toFixed(1);",
   "}",
   "function renderTakeaway(){ const cs=curImage().codecs.map(c=>({c:c, bytes:interp(c.points, DATA.target).bytes}));",
@@ -191,6 +211,9 @@ const SCRIPT = [
   "  const baseName=base.c.id==='mozjpeg'?'mozjpeg (baseline JPEG)':base.c.name;",
   "  let msg='At equal quality (ssimulacra2 '+DATA.target+'), <b>'+win.c.name+'</b> is the smallest at <b>'+fmtKB(win.bytes)+'</b>';",
   "  if(win.c.id!==base.c.id && pct>0) msg+=', about <b>'+pct+'% smaller</b> than '+baseName;",
+  "  if(DATA.rd){ const rated=curImage().codecs.filter(c=>c.id!==DATA.rd.baselineId && c.bd!=null);",
+  "    if(rated.length){ const best=rated.reduce((a,b)=>b.bd<a.bd?b:a);",
+  "      msg+='. Across the measured qualities, <b>'+best.name+'</b> has the best BD-rate: <b>'+fmtBd(best.bd)+'</b> bits vs '+DATA.rd.baselineName; } }",
   "  $('#takeaway').innerHTML=msg+'.';",
   "}",
   "function renderAggregate(){ const box=$('#aggregate');",
@@ -204,8 +227,9 @@ const SCRIPT = [
   "  const N=DATA.images.length, rows=order.map(id=>({id, name:acc[id].name, color:acc[id].color, n:acc[id].bpps.length, avgBpp:mean(acc[id].bpps), sav:acc[id].sav.length?mean(acc[id].sav):null, wins:wins[id]||0}));",
   "  // A codec that failed on some images averages a different set, so only one measured on all of them can be the best.",
   "  rows.sort((a,b)=>(b.n===N)-(a.n===N)||a.avgBpp-b.avgBpp); const best=rows[0].n===N?rows[0].id:null;",
-  "  let h='<table class=readout><tr><th>codec</th><th>avg bpp</th><th>wins</th><th>savings vs mozjpeg</th><th>measured</th></tr>';",
-  "  rows.forEach(r=>{ h+='<tr class='+(r.id===best?'win':'')+'><td><span class=swatch style=background:'+r.color+'></span>'+r.name+'</td><td>'+r.avgBpp.toFixed(3)+'</td><td>'+r.wins+'/'+N+'</td><td>'+(r.sav===null?'n/a':(r.sav.toFixed(1)+'%'))+'</td><td>'+r.n+'/'+N+'</td></tr>'; });",
+  "  const meanBd=id=>{ const a=DATA.rd.aggregate.find(x=>x.id===id); if(!a) return 'n/a'; return id===DATA.rd.baselineId ? 'baseline' : fmtBd(a.meanBdRate)+' ('+a.rated+'/'+a.count+')'; };",
+  "  let h='<table class=readout><tr><th>codec</th><th>avg bpp</th><th>wins</th><th>savings vs mozjpeg</th>'+(DATA.rd?'<th>mean BD-rate vs '+DATA.rd.baselineName+'</th>':'')+'<th>measured</th></tr>';",
+  "  rows.forEach(r=>{ h+='<tr class='+(r.id===best?'win':'')+'><td><span class=swatch style=background:'+r.color+'></span>'+r.name+'</td><td>'+r.avgBpp.toFixed(3)+'</td><td>'+r.wins+'/'+N+'</td><td>'+(r.sav===null?'n/a':(r.sav.toFixed(1)+'%'))+'</td>'+(DATA.rd?'<td>'+meanBd(r.id)+'</td>':'')+'<td>'+r.n+'/'+N+'</td></tr>'; });",
   "  h+='</table>'; $('#aggregate .agg').innerHTML=h;",
   "}",
   "function renderAll(){ renderTabs(); renderTakeaway(); renderFormats(); renderViewer(); const [x0,x1]=xrange(); const q=$('#quality'); q.min=x0; q.max=x1; q.step=0.5; if(selS<x0)selS=x0; if(selS>x1)selS=x1; q.value=selS; renderChart(); renderReadout(); }",
@@ -227,6 +251,13 @@ const SCRIPT = [
 /** Build the full standalone HTML document for a report. */
 export function buildHtml(report) {
   const json = JSON.stringify(toClientData(report)).replace(/</g, "\\u003c");
+  const rd = report.rd;
+  const sub = rd
+    ? `Rate–distortion over ssimulacra2 ${rd.targets.join(", ")}; the images are the encodes at ${report.target}. Drag the wipe to compare original vs codec; move the quality slider to read size at any quality.`
+    : `Equal-quality target: ssimulacra2 ${report.target}. Drag the wipe to compare original vs codec; move the quality slider to read size at any quality.`;
+  const chartNote = rd
+    ? `Each dot is one <b>real encode</b>: the equal-quality search at one target (ssimulacra2 ${rd.targets.join(", ")}), the same points as the terminal table and the CSV. A curve that sits lower and to the right is better: more quality for fewer bytes. <b>BD-rate</b> is the average bit-rate difference against ${rd.baselineName} at equal quality over the range both curves cover (negative = fewer bits). The <b>quality slider</b> interpolates between the measured points; it does not run the encoders.`
+    : "Each dot is one <b>real encode</b>. A curve that sits lower and to the right is better: more quality for fewer bytes. The <b>quality slider</b> reads, from each codec's measured curve, how large a file it needs to reach that quality (interpolating between measured points) — it does not run the encoders.";
   return [
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',
@@ -235,7 +266,7 @@ export function buildHtml(report) {
     `<style>${STYLE}</style>`,
     "</head><body>",
     "<header><h1>Codec comparison</h1>",
-    `<div class="sub">Equal-quality target: ssimulacra2 ${report.target}. Drag the wipe to compare original vs codec; move the quality slider to read size at any quality.</div></header>`,
+    `<div class="sub">${sub}</div></header>`,
     "<main>",
     '<div id="tabs" class="tabs"></div>',
     '<div id="takeaway" class="takeaway"></div>',
@@ -256,7 +287,7 @@ export function buildHtml(report) {
     '<div id="chart"></div>',
     '<div class="qline">quality (ssimulacra2): <input id="quality" type="range"> <b id="qval"></b></div>',
     '<div id="readout"></div>',
-    '<p class="note">Each dot is one <b>real encode</b>. A curve that sits lower and to the right is better: more quality for fewer bytes. The <b>quality slider</b> reads, from each codec\'s measured curve, how large a file it needs to reach that quality (interpolating between measured points) — it does not run the encoders.</p>',
+    `<p class="note">${chartNote}</p>`,
     "</section>",
     "</div>",
     '<section id="aggregate" class="card"><h2>Across all images</h2><div class="agg"></div></section>',
@@ -269,6 +300,9 @@ export function buildHtml(report) {
     '<dt>dssim</dt><dd>Structural dissimilarity: lower is closer to the original. Shown alongside ssimulacra2 as a second opinion. <a href="https://github.com/kornelski/dssim" target="_blank" rel="noopener">reference</a></dd>',
     "<dt>Difference view</dt><dd>An amplified map of where the selected codec departs from the original: per pixel, |original − codec| scaled by the amplify factor (1–30). It is a display gain, not a metric. At equal quality the real differences are tiny, so at ×1 the map is nearly black; raise amplify to reveal them. A pixel that is identical stays black at any amplify. The map is per-channel, so a color tint means chroma (color) error and neutral gray means luma (brightness) error. An amplified, busy map is not a sign of low quality; compare formats at the same amplify for a fair look.</dd>",
     "<dt>Rate–distortion</dt><dd>The size-vs-quality trade-off. Each codec's curve is its efficiency: the lower the curve, the fewer bytes it needs for the same quality.</dd>",
+    ...(rd
+      ? ['<dt>BD-rate</dt><dd>Bjøntegaard delta rate: one number for how far apart two rate–distortion curves are, the average bit-rate difference at equal quality over the qualities both codecs reached. −20% means 20% fewer bits than the baseline for the same quality. <a href="https://www.itu.int/wftp3/av-arch/video-site/0104_Aus/VCEG-M33.doc" target="_blank" rel="noopener">reference</a></dd>']
+      : []),
     "</dl>",
     '<div class="links"><span>Codecs:</span>' +
       '<a href="https://github.com/libjxl/libjxl" target="_blank" rel="noopener">JPEG XL</a>' +

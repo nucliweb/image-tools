@@ -10,7 +10,7 @@ import { run, resolveCommand, failureReason } from "../src/exec.js";
 import { collectImages, aggregate } from "../src/batch.js";
 import { sweepCodec } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
-import { parseTargets, aggregateBdRates } from "../src/rd.js";
+import { parseTargets, aggregateBdRates, imageBdRates } from "../src/rd.js";
 import {
   toComparisonTable,
   toCsv,
@@ -40,7 +40,9 @@ Options:
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
       --rd <list>           Rate-distortion mode: search every codec at each of these
                             targets (e.g. 70,80,85,90,95), report bpp per target and
-                            BD-rate vs mozjpeg; replaces --target
+                            BD-rate vs mozjpeg. With --html, the report plots these
+                            curves and shows the encodes at the target closest to
+                            --target
       --csv <path>          Also write the results as CSV
       --html <path>         Write an interactive self-contained HTML report
       --html-max-dim <n>    Downscale embedded report images above this size (default: 1600)
@@ -103,10 +105,6 @@ function main() {
       console.error(err.message);
       process.exit(1);
     }
-    if (values.html) {
-      console.error("--html is not supported with --rd; run them separately.");
-      process.exit(1);
-    }
   }
   let ids;
   try {
@@ -148,7 +146,7 @@ function main() {
     const baselineId = ids.includes("mozjpeg") ? "mozjpeg" : ids[0];
     const baselineName = CODECS[baselineId]?.name ?? baselineId;
     if (rdTargets) {
-      runRd(images, ids, rdTargets, workdir, searchOpts, { baselineId, baselineName, csv: values.csv });
+      runRd(images, ids, rdTargets, workdir, searchOpts, { baselineId, baselineName, csv: values.csv, html: values.html, target, embed });
       return;
     }
 
@@ -256,10 +254,16 @@ function main() {
 /**
  * Rate-distortion mode: run the equal-quality search for every image, codec and
  * target, then print one RD table per image (bpp per target and BD-rate vs the
- * baseline), a mean BD-rate summary for a batch, and optionally a long CSV.
+ * baseline), a mean BD-rate summary for a batch, and optionally a long CSV and
+ * an HTML report that plots the same points and BD-rates.
  */
-function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baselineName, csv }) {
+function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baselineName, csv, html, target, embed }) {
+  // The report's viewer shows one encode per codec: the one at the RD target
+  // closest to --target, embedded right after its search, before the next search
+  // reuses the work directory.
+  const previewTarget = targets.reduce((best, t) => (Math.abs(t - target) < Math.abs(best - target) ? t : best));
   const perImage = [];
+  const reportImages = [];
   images.forEach((image, idx) => {
     const refNorm = join(workdir, `img${idx}.norm.png`);
     let dims;
@@ -272,12 +276,14 @@ function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baseline
     }
 
     process.stderr.write(`# ${basename(image)}\n`);
+    const previews = new Map();
     const codecs = ids.map((id) => {
       const codec = CODECS[id];
       process.stderr.write(`  → ${codec.name} @ ${targets.join(", ")} …\n`);
       const points = targets.map((target) => {
         try {
           const op = findQualityForTarget(codec, image, target, workdir, { ...searchOpts, referenceNorm: refNorm });
+          if (html && target === previewTarget) previews.set(id, { ...op, dataUri: embed(op.decodedPng, dims) });
           return { target, ...op };
         } catch (err) {
           const error = failureReason(err);
@@ -288,6 +294,29 @@ function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baseline
       return { id, name: codec.name, points };
     });
     perImage.push({ image: basename(image), width: dims.width, height: dims.height, codecs });
+
+    // A codec whose encode at the preview target failed has nothing to show in the
+    // viewer, so the report leaves it out, as it does outside RD mode.
+    if (!html) return;
+    const rates = imageBdRates(codecs, baselineId);
+    const reportCodecs = codecs
+      .filter((c) => previews.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        points: c.points.filter((p) => !p.failed).sort((a, b) => a.ssimulacra2 - b.ssimulacra2),
+        preview: previews.get(c.id),
+        bdRate: rates.get(c.id),
+      }));
+    if (reportCodecs.length > 0) {
+      reportImages.push({
+        name: basename(image),
+        width: dims.width,
+        height: dims.height,
+        originalDataUri: embed(refNorm, dims),
+        codecs: reportCodecs,
+      });
+    }
   });
 
   if (perImage.length === 0) {
@@ -298,14 +327,20 @@ function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baseline
   const meta = { targets, baselineId, baselineName };
   console.log(perImage.map((p) => toRdTable(p, meta)).join("\n\n"));
 
+  const aggregateRows = aggregateBdRates(perImage, baselineId);
   if (perImage.length > 1) {
-    const rows = aggregateBdRates(perImage, baselineId);
-    console.log(`\n${toRdAggregateTable(rows, { ...meta, imageCount: perImage.length })}`);
+    console.log(`\n${toRdAggregateTable(aggregateRows, { ...meta, imageCount: perImage.length })}`);
   }
 
   if (csv) {
     writeFileSync(csv, `${toRdCsv(perImage)}\n`);
     process.stderr.write(`Wrote ${csv}\n`);
+  }
+
+  if (html) {
+    const rd = { targets, baselineId, baselineName, aggregate: aggregateRows };
+    writeFileSync(html, buildHtml({ target: previewTarget, rd, images: reportImages }));
+    process.stderr.write(`Wrote ${html}\n`);
   }
 }
 

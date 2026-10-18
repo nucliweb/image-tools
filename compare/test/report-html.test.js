@@ -66,3 +66,36 @@ test("buildHtml escapes < in embedded JSON to avoid breaking out of the script",
   const html = buildHtml(evil);
   assert.ok(!html.includes("X</script>"), "raw </script> must not appear from data");
 });
+
+test("an RD report carries the targets, each codec's BD-rate and the batch mean", () => {
+  const rd = structuredClone(report);
+  rd.rd = {
+    targets: [70, 92],
+    baselineId: "jxl",
+    baselineName: "JPEG XL",
+    aggregate: [{ id: "jxl", name: "JPEG XL", meanBdRate: 0, rated: 1, count: 1 }],
+  };
+  rd.images[0].codecs[0].bdRate = 0;
+  const data = JSON.parse(buildHtml(rd).match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1]);
+  assert.deepEqual(data.rd.targets, [70, 92]);
+  assert.equal(data.rd.baselineId, "jxl");
+  assert.equal(data.rd.aggregate[0].meanBdRate, 0);
+  assert.equal(data.images[0].codecs[0].bd, 0);
+});
+
+test("a report without RD data has no BD-rates", () => {
+  const data = JSON.parse(buildHtml(report).match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1]);
+  assert.equal(data.rd, null);
+  assert.equal(data.images[0].codecs[0].bd, null);
+});
+
+test("RD points keep their target so the page reads the measured encode there", () => {
+  const rd = structuredClone(report);
+  rd.rd = { targets: [70, 90], baselineId: "jxl", baselineName: "JPEG XL", aggregate: [] };
+  rd.images[0].codecs[0].points = [
+    { target: 70, ssimulacra2: 70.3, bpp: 0.5, bytes: 100, label: "-d 5" },
+    { target: 90, ssimulacra2: 89.6, bpp: 1.2, bytes: 240, label: "-d 1" },
+  ];
+  const data = JSON.parse(buildHtml(rd).match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1]);
+  assert.deepEqual(data.images[0].codecs[0].points.map((p) => p.t), [70, 90]);
+});

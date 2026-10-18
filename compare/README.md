@@ -43,7 +43,7 @@ Options:
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--effort <0..10>` | codec default | Matched encoder effort across codecs that have the knob (higher = slower) |
 | `--time-runs <n>` | `1` | Time each codec's encode n times and report the median |
-| `--rd <list>` | — | Rate-distortion mode: search each codec at every target in the list (replaces `--target`) |
+| `--rd <list>` | — | Rate-distortion mode: search each codec at every target in the list; with `--html`, the report shows the encodes at the target closest to `--target` |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
 | `--html-max-dim <n>` | `1600` | Downscale embedded report images above this size |
@@ -76,7 +76,13 @@ That is `kodim04.png` in the Docker image. A `*` marks a target the codec could 
 
 BD-rate (the Bjøntegaard delta rate) is the average difference in bits at equal quality across the range both curves cover: `-30%` means the codec needs, on average, 30% fewer bits than the baseline for the same ssimulacra2 score. Rate is interpolated piecewise-linearly in the log domain between the measured points, rather than with the classic cubic fit, so it stays well-behaved with few targets and never overshoots. A codec whose curve does not overlap the baseline's (for example, one pinned at its range bound at every target) shows `n/a`.
 
-With more than one image, a summary prints each codec's **mean BD-rate** across the images it could be rated on. `--csv` writes one row per image, codec and target (`image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations`), ready to plot. The cost is one equal-quality search per target, so five targets take about five times as long as a single-target run. `--html` is not available in this mode; the HTML report keeps its own coarse rate–distortion sweep.
+With more than one image, a summary prints each codec's **mean BD-rate** across the images it could be rated on. `--csv` writes one row per image, codec and target (`image,codec,target,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations`), ready to plot. The cost is one equal-quality search per target, so five targets take about five times as long as a single-target run. With `--html`, the [report](#interactive-html-report) plots these curves instead of its fixed-knob sweep:
+
+```bash
+compare-codecs images/ --rd 70,80,85,90,95 --html rd.html
+```
+
+Its chart dots are the equal-quality encodes at each target, the same points as the table and the CSV, and the readout under the chart and the across-all-images summary add each codec's BD-rate and mean BD-rate. The viewer shows each codec's encode at the target closest to `--target` (90 by default), so pass a list that includes the quality you want to inspect.
 
 ## Interactive HTML report
 
@@ -91,7 +97,7 @@ equal-quality results as the table and the CSV:
 - a **format toggle** with live size / bpp / ssimulacra2 / dssim,
 - a **difference view** with an amplify slider, an in-browser map of where the selected codec departs from the original,
 - a **plain-language takeaway** and, for a batch, an **across-all-images** summary,
-- a **rate–distortion chart** (bpp vs ssimulacra2) with one curve per codec,
+- a **rate–distortion chart** (bpp vs ssimulacra2) with one curve per codec: a fixed-knob sweep, or the equal-quality curves and BD-rates of [rate-distortion mode](#rate-distortion-mode) with `--rd`,
 - a **quality slider** that reads each codec's size at any quality level.
 
 ```bash
