@@ -21,7 +21,6 @@ orig="$work/orig.png"
 
 ok()   { printf '  \033[32mok\033[0m   %s\n' "$1"; pass=$((pass + 1)); }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail + 1)); }
-skip() { printf '  --   %s (optional, absent)\n' "$1"; }
 
 # A tool "runs" if invoking it does not fail with 126/127 (missing/not executable).
 runs() {
@@ -81,10 +80,7 @@ runs "idiff (OpenImageIO)" idiff "$orig" "$dec"
 runs "compare (ImageMagick)" compare -metric PSNR "$orig" "$dec" null:
 ( cd "$work" && flip -r "$orig" -t "$dec" >/dev/null 2>&1 ) && ok "flip (NVIDIA)" || bad "flip"
 
-# butteraugli is explicitly optional (redundant with ssimulacra2)
-if command -v butteraugli >/dev/null 2>&1; then
-  runs "butteraugli (optional)" butteraugli "$orig" "$dec"
-else skip "butteraugli"; fi
+runs "butteraugli" butteraugli "$orig" "$dec"
 
 echo
 echo "== Presence of the rest of the toolbox =="
