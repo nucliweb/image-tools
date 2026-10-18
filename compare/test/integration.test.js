@@ -122,6 +122,7 @@ test("sweepCodec builds a rate-distortion curve sorted by quality", { skip: jxlR
 });
 
 const CLI = fileURLToPath(new URL("../bin/compare.js", import.meta.url));
+const bd = (rate) => (rate === null ? "n/a" : `${rate > 0 ? "+" : ""}${rate.toFixed(1)}%`);
 
 test("one run writes the table, CSV and HTML report from the same search", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
   withWorkdir((dir) => {
@@ -227,6 +228,44 @@ test("libjpeg-turbo encodes from a PPM copy of the reference", { skip: turboRead
     assert.ok(r.bytes > 0 && r.bpp > 0);
     assert.match(r.label, /-quality \d+/);
     assert.ok(readFileSync(join(dir, "reference.norm.ppm")).subarray(0, 2).equals(Buffer.from("P6")), "the encoder read a binary PPM");
+  });
+});
+
+test("RD mode with --html plots the measured RD points and the BD-rates of the table", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const images = join(dir, "images");
+    mkdirSync(images);
+    makeTestPng(join(images, "a.png"), 128, 96);
+    makeTestPng(join(images, "b.png"), 96, 128);
+    const csvPath = join(dir, "rd.csv");
+    const htmlPath = join(dir, "rd.html");
+
+    const res = spawnSync(process.execPath, [CLI, images, "--rd", "75,85", "--target", "85", "--codecs", "jxl,webp", "--csv", csvPath, "--html", htmlPath], { encoding: "utf8" });
+    assert.equal(res.status, 0, res.stderr);
+
+    const json = readFileSync(htmlPath, "utf8").match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
+    const data = JSON.parse(json);
+    assert.equal(data.target, 85, "the viewer shows the encodes at --target");
+    assert.deepEqual(data.rd.targets, [75, 85]);
+    assert.equal(data.rd.baselineId, "jxl");
+
+    const rows = readFileSync(csvPath, "utf8").trim().split("\n").slice(1).map((l) => l.split(","));
+    for (const image of data.images) {
+      for (const codec of image.codecs) {
+        const csvBytes = rows.filter((r) => r[0] === image.name && r[1] === codec.name).map((r) => Number(r[4]));
+        assert.deepEqual(codec.points.map((p) => p.bytes).sort((a, b) => a - b), csvBytes.sort((a, b) => a - b), `${image.name} ${codec.name}: one point per RD target`);
+        const at85 = rows.find((r) => r[0] === image.name && r[1] === codec.name && r[2] === "85");
+        assert.equal(codec.preview.bytes, Number(at85[4]), "the preview is the encode at --target");
+      }
+      // The table prints the same BD-rate (or n/a when the curves cannot be compared).
+      const webp = image.codecs.find((c) => c.id === "webp");
+      const table = res.stdout.slice(res.stdout.indexOf(`Rate–distortion — ${image.name}`));
+      const webpRow = table.split("\n").find((l) => l.startsWith("| WebP "));
+      assert.ok(webpRow.includes(bd(webp.bd)), `${image.name}: the same BD-rate as the table`);
+    }
+    const mean = data.rd.aggregate.find((r) => r.id === "webp").meanBdRate;
+    const summaryRow = res.stdout.slice(res.stdout.indexOf("Rate–distortion summary")).split("\n").find((l) => l.startsWith("| WebP "));
+    assert.ok(summaryRow.includes(bd(mean)), "the same mean BD-rate as the summary");
   });
 });
 
