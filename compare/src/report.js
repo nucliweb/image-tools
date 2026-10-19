@@ -17,6 +17,12 @@ function formatBytes(bytes) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+/** Format a peak memory size in MB, or "n/a" when it was not measured. */
+function formatMemory(bytes) {
+  if (bytes === null || bytes === undefined) return "n/a";
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /** Format a duration in ms for a human: "n/a" when unmeasured, ms under a second, else seconds. */
 function formatDuration(ms) {
   if (ms === null || ms === undefined) return "n/a";
@@ -71,6 +77,7 @@ export function toComparisonTable(results, meta) {
     { header: "iters", align: "right" },
     { header: "encode", align: "right" },
     { header: "cpu", align: "right" },
+    { header: "memory", align: "right" },
     { header: "enc total", align: "right" },
     { header: "cpu total", align: "right" },
   ];
@@ -87,6 +94,7 @@ export function toComparisonTable(results, meta) {
     String(r.iterations),
     formatDuration(r.encodeWallMs),
     formatDuration(r.encodeCpuMs),
+    formatMemory(r.encodePeakBytes),
     formatDuration(r.totalEncodeWallMs),
     formatDuration(r.totalEncodeCpuMs),
         ],
@@ -145,6 +153,7 @@ const SINGLE_FIELDS = [
   (r) => csvMs(r.encodeCpuMs),
   (r) => csvMs(r.totalEncodeWallMs),
   (r) => csvMs(r.totalEncodeCpuMs),
+  (r) => r.encodePeakBytes ?? "",
 ];
 const BATCH_FIELDS = [...SINGLE_FIELDS.slice(0, 5), (r) => r.reached, ...SINGLE_FIELDS.slice(5)];
 
@@ -158,7 +167,7 @@ function csvRow(r, fields) {
 export function toBatchCsv(perImage) {
   const head =
     "image,codec,setting,bytes,bpp,ssimulacra2,dssim,reached,iterations," +
-    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error";
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,encode_peak_rss_bytes,error";
   const lines = [];
   for (const { image, results } of perImage) {
     for (const r of measuredFirst(results)) {
@@ -172,7 +181,7 @@ export function toBatchCsv(perImage) {
 export function toCsv(results) {
   const header =
     "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations," +
-    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error";
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,encode_peak_rss_bytes,error";
   return [header, ...measuredFirst(results).map((r) => csvRow(r, SINGLE_FIELDS))].join("\n");
 }
 

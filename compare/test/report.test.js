@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { toComparisonTable, toAggregateTable, toCsv, toRdTable, toRdAggregateTable, toRdCsv } from "../src/report.js";
 
 const results = [
-  { name: "AVIF", label: "-q 87", bytes: 55966, bpp: 1.708, ssimulacra2: 90.46, dssim: 0.00033, iterations: 7, encodeWallMs: 410, encodeCpuMs: 1290, totalEncodeWallMs: 1800, totalEncodeCpuMs: 5400 },
-  { name: "JPEG XL", label: "-d 0.86", bytes: 41822, bpp: 1.276, ssimulacra2: 89.83, dssim: 0.0004, iterations: 5, encodeWallMs: 842, encodeCpuMs: 1560, totalEncodeWallMs: 4200, totalEncodeCpuMs: 7800 },
+  { name: "AVIF", label: "-q 87", bytes: 55966, bpp: 1.708, ssimulacra2: 90.46, dssim: 0.00033, iterations: 7, encodeWallMs: 410, encodeCpuMs: 1290, totalEncodeWallMs: 1800, totalEncodeCpuMs: 5400, encodePeakBytes: 50331648 },
+  { name: "JPEG XL", label: "-d 0.86", bytes: 41822, bpp: 1.276, ssimulacra2: 89.83, dssim: 0.0004, iterations: 5, encodeWallMs: 842, encodeCpuMs: 1560, totalEncodeWallMs: 4200, totalEncodeCpuMs: 7800, encodePeakBytes: 104857600 },
 ];
 
 const meta = { reference: "photo.png", width: 512, height: 512, target: 90 };
@@ -55,10 +55,18 @@ test("comparison table shows total encode effort across all iterations", () => {
   assert.match(table, /5\.40 s/, "AVIF total cpu effort in seconds");
 });
 
+test("comparison table shows the encoder's peak memory", () => {
+  const table = toComparisonTable(results, meta);
+  assert.match(table, /memory/, "expected a memory column");
+  assert.match(table, /48\.0 MB/, "AVIF peak memory in MB");
+  assert.match(table, /100\.0 MB/, "JPEG XL peak memory in MB");
+});
+
 test("comparison table shows n/a when timing is unavailable", () => {
-  const untimed = [{ ...results[1], encodeWallMs: null, encodeCpuMs: null }];
+  const untimed = [{ ...results[1], encodeWallMs: null, encodeCpuMs: null, encodePeakBytes: null }];
   const table = toComparisonTable(untimed, meta);
   assert.match(table, /n\/a/);
+  assert.doesNotMatch(table, /MB/, "no memory figure when it was not measured");
 });
 
 test("csv has a header row and one row per result, sorted by size", () => {
@@ -66,10 +74,10 @@ test("csv has a header row and one row per result, sorted by size", () => {
   const lines = csv.trim().split("\n");
   assert.equal(
     lines[0],
-    "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,error",
+    "codec,setting,bytes,bpp,ssimulacra2,dssim,iterations,encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,encode_peak_rss_bytes,error",
   );
-  assert.match(lines[1], /^JPEG XL,-d 0\.86,41822,.*,842,1560,4200,7800,$/);
-  assert.match(lines[2], /^AVIF,-q 87,55966,.*,410,1290,1800,5400,$/);
+  assert.match(lines[1], /^JPEG XL,-d 0\.86,41822,.*,842,1560,4200,7800,104857600,$/);
+  assert.match(lines[2], /^AVIF,-q 87,55966,.*,410,1290,1800,5400,50331648,$/);
 });
 
 const rdPoint = (target, bpp, ssimulacra2, reached = true) => ({
@@ -134,7 +142,7 @@ test("CSV keeps a row for a failed codec, with empty metrics and the error", () 
   const lines = toCsv([...results, failed]).split("\n");
   assert.match(lines[0], /,error$/);
   assert.match(lines[1], /,$/, "measured rows have an empty error");
-  assert.equal(lines.at(-1), "AVIF SVT-AV1,,,,,,,,,,,Source Height must be even for YUV_420 colorspace");
+  assert.equal(lines.at(-1), "AVIF SVT-AV1,,,,,,,,,,,,Source Height must be even for YUV_420 colorspace");
 });
 
 test("RD table marks a failed target, and the CSV carries its error", () => {

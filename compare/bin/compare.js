@@ -197,6 +197,7 @@ function main() {
           dataUri: embed(op.decodedPng, dims),
           encodeWallMs: op.encodeWallMs,
           encodeCpuMs: op.encodeCpuMs,
+          encodePeakBytes: op.encodePeakBytes,
         };
         process.stderr.write(`  ~ ${codec.name} sweep …\n`);
         try {

@@ -4,7 +4,7 @@
 // and run for real inside the Docker image or on a full local setup.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -167,6 +167,11 @@ test("one run writes the table, CSV and HTML report from the same search", { ski
 
     const rows = parseResultsCsv(readFileSync(csvPath, "utf8"));
     assert.equal(rows.length, 4, "one CSV row per image and codec");
+    if (existsSync("/usr/bin/time")) {
+      const [header, ...lines] = readFileSync(csvPath, "utf8").trim().split("\n");
+      const at = header.split(",").indexOf("encode_peak_rss_bytes");
+      assert.ok(lines.every((l) => Number(l.split(",")[at]) > 0), "each row carries the encoder's peak memory");
+    }
 
     const json = readFileSync(htmlPath, "utf8").match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
     const data = JSON.parse(json);
