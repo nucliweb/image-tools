@@ -1,6 +1,84 @@
 {
   "target": 90,
   "images": {
+    "cid22-blossoms.png": {
+      "JPEG XL": {
+        "bytes": 105038,
+        "ssimulacra2": 90.0777
+      },
+      "WebP": {
+        "bytes": 118162,
+        "ssimulacra2": 76.8704
+      },
+      "AVIF": {
+        "bytes": 128030,
+        "ssimulacra2": 89.7455
+      },
+      "jpegli": {
+        "bytes": 137045,
+        "ssimulacra2": 90.1094
+      },
+      "mozjpeg": {
+        "bytes": 164234,
+        "ssimulacra2": 90.2027
+      },
+      "HEIC": {
+        "bytes": 194761,
+        "ssimulacra2": 82.2173
+      }
+    },
+    "cid22-church.png": {
+      "JPEG XL": {
+        "bytes": 61171,
+        "ssimulacra2": 89.8528
+      },
+      "AVIF": {
+        "bytes": 68127,
+        "ssimulacra2": 89.7307
+      },
+      "HEIC": {
+        "bytes": 71021,
+        "ssimulacra2": 90.1109
+      },
+      "jpegli": {
+        "bytes": 78183,
+        "ssimulacra2": 89.7383
+      },
+      "WebP": {
+        "bytes": 94246,
+        "ssimulacra2": 88.906
+      },
+      "mozjpeg": {
+        "bytes": 99280,
+        "ssimulacra2": 89.8889
+      }
+    },
+    "cid22-friends.png": {
+      "JPEG XL": {
+        "bytes": 52793,
+        "ssimulacra2": 89.8345
+      },
+      "AVIF": {
+        "bytes": 54356,
+        "ssimulacra2": 89.9703
+      },
+      "jpegli": {
+        "bytes": 64424,
+        "ssimulacra2": 89.7992
+      },
+      "HEIC": {
+        "bytes": 79196,
+        "ssimulacra2": 90.0101
+      },
+      "WebP": {
+        "bytes": 87218,
+        "ssimulacra2": 89.4407
+      },
+      "mozjpeg": {
+        "bytes": 91561,
+        "ssimulacra2": 90.2512
+      }
+    },
     "corporate-memphis.png": {
       "AVIF": {
         "bytes": 19074,
@@ -51,84 +129,6 @@
       "mozjpeg": {
         "bytes": 1119980,
         "ssimulacra2": 89.5984
-      }
-    },
-    "kodim04.png": {
-      "JPEG XL": {
-        "bytes": 120534,
-        "ssimulacra2": 90.2114
-      },
-      "jpegli": {
-        "bytes": 130656,
-        "ssimulacra2": 90.0199
-      },
-      "HEIC": {
-        "bytes": 141631,
-        "ssimulacra2": 89.7688
-      },
-      "AVIF": {
-        "bytes": 150019,
-        "ssimulacra2": 90.1069
-      },
-      "WebP": {
-        "bytes": 173748,
-        "ssimulacra2": 89.8091
-      },
-      "mozjpeg": {
-        "bytes": 201372,
-        "ssimulacra2": 90.1333
-      }
-    },
-    "kodim19.png": {
-      "JPEG XL": {
-        "bytes": 136558,
-        "ssimulacra2": 90.0209
-      },
-      "jpegli": {
-        "bytes": 147032,
-        "ssimulacra2": 90.0228
-      },
-      "AVIF": {
-        "bytes": 148498,
-        "ssimulacra2": 89.7449
-      },
-      "HEIC": {
-        "bytes": 155322,
-        "ssimulacra2": 89.9361
-      },
-      "WebP": {
-        "bytes": 173918,
-        "ssimulacra2": 89.9646
-      },
-      "mozjpeg": {
-        "bytes": 213006,
-        "ssimulacra2": 89.9248
-      }
-    },
-    "kodim23.png": {
-      "JPEG XL": {
-        "bytes": 74113,
-        "ssimulacra2": 89.5865
-      },
-      "jpegli": {
-        "bytes": 97039,
-        "ssimulacra2": 90.2479
-      },
-      "AVIF": {
-        "bytes": 111556,
-        "ssimulacra2": 89.7408
-      },
-      "mozjpeg": {
-        "bytes": 130349,
-        "ssimulacra2": 89.8537
-      },
-      "WebP": {
-        "bytes": 140374,
-        "ssimulacra2": 89.0397
-      },
-      "HEIC": {
-        "bytes": 157442,
-        "ssimulacra2": 90.2236
       }
     },
     "pipeline-diagram.png": {
