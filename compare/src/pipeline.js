@@ -22,9 +22,10 @@ export function encoderInput(codec, referencePng) {
  * Encode the reference at a given knob, decode back to PNG, strip the decoded
  * PNG to critical chunks (so ssimulacra2 can read every codec's output), and
  * measure it. The reference is expected to be already normalized.
- * Timing (wall and CPU) is measured for the encode step only, since that is the
- * codec's own cost; decoding and metrics are the harness's measurement tools.
- * @returns {{ score, bytes, decodedPng, encodeWallMs, encodeCpuMs }}
+ * Timing (wall and CPU) and peak memory are measured for the encode step only,
+ * since that is the codec's own cost; decoding and metrics are the harness's
+ * measurement tools.
+ * @returns {{ score, bytes, decodedPng, encodeWallMs, encodeCpuMs, encodePeakBytes }}
  */
 export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "", effort = null) {
   const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
@@ -41,6 +42,7 @@ export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = ""
     decodedPng,
     encodeWallMs: timing.wallMs,
     encodeCpuMs: timing.cpuMs,
+    encodePeakBytes: timing.peakBytes,
   };
 }
 
@@ -59,18 +61,22 @@ export function median(values) {
  * Time the codec's encode at a knob `runs` times and return the median wall and
  * CPU time. Repeating and taking the median damps the run-to-run noise of a single
  * timing sample (scheduling, cache state); the median rejects the odd outlier.
- * @returns {{ wallMs: number | null, cpuMs: number | null }}
+ * Peak memory is the largest of the runs, the most an encode needed.
+ * @returns {{ wallMs: number | null, cpuMs: number | null, peakBytes: number | null }}
  */
 export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, effort = null) {
   const encoded = join(workdir, `${codec.id}.timing.${codec.ext}`);
   const wall = [];
   const cpu = [];
+  const peak = [];
   for (let i = 0; i < runs; i++) {
     const t = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, encoderInput(codec, referencePng), encoded, knob, effort));
     wall.push(t.wallMs);
     cpu.push(t.cpuMs);
+    peak.push(t.peakBytes);
   }
-  return { wallMs: median(wall), cpuMs: median(cpu) };
+  const peakBytes = peak.some((p) => p === null) ? null : Math.max(...peak);
+  return { wallMs: median(wall), cpuMs: median(cpu), peakBytes };
 }
 
 /**
@@ -78,7 +84,7 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, eff
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
  * @returns {{ id, name, label, knob, ssimulacra2, dssim, bytes, bpp, iterations, reached,
- *   decodedPng, encodeWallMs, encodeCpuMs, totalEncodeWallMs, totalEncodeCpuMs }}
+ *   decodedPng, encodeWallMs, encodeCpuMs, encodePeakBytes, totalEncodeWallMs, totalEncodeCpuMs }}
  */
 export function findQualityForTarget(codec, referencePng, target, workdir, opts = {}) {
   // Normalize the reference once: strip ancillary chunks so ssimulacra2/dssim can
@@ -127,7 +133,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
   const timing =
     timeRuns > 1
       ? medianEncodeTiming(codec, refNorm, search.value, workdir, timeRuns, effort)
-      : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs };
+      : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs, peakBytes: final.encodePeakBytes };
 
   return {
     id: codec.id,
@@ -143,6 +149,7 @@ export function findQualityForTarget(codec, referencePng, target, workdir, opts 
     decodedPng: final.decodedPng,
     encodeWallMs: timing.wallMs,
     encodeCpuMs: timing.cpuMs,
+    encodePeakBytes: timing.peakBytes,
     totalEncodeWallMs: timingComplete ? totalWallMs : null,
     totalEncodeCpuMs: timingComplete ? totalCpuMs : null,
   };

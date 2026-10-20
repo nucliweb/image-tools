@@ -131,14 +131,16 @@ sample images).
 An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 
 ```
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
-| Codec   | Setting      |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu | enc total | cpu total |
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
-| JPEG XL | -d 1.08      | 15.5 KB | 0.826 |       90.38 | 0.00044 |     6 |  60 ms | 240 ms |    460 ms |    1.86 s |
-| jpegli  | -d 0.97      | 21.7 KB | 1.155 |       89.74 | 0.00050 |     7 |  48 ms | 120 ms |    390 ms |    980 ms |
-| AVIF    | --min/max 10 | 25.3 KB | 1.349 |       90.39 | 0.00030 |     5 |  50 ms | 150 ms |    280 ms |    840 ms |
-| WebP    | -q 97        | 29.8 KB | 1.589 |       89.63 | 0.00036 |     5 |  22 ms |  22 ms |    130 ms |    130 ms |
-+---------+--------------+---------+-------+-------------+---------+-------+--------+--------+-----------+-----------+
++---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
+| Codec   | Setting     |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |  memory | enc total | cpu total |
++---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
+| JPEG XL | -d 0.74     | 51.6 KB | 1.611 |       89.85 | 0.00027 |     7 |  60 ms | 260 ms | 48.9 MB |    760 ms |    2.95 s |
+| AVIF    | --min/max 8 | 53.0 KB | 1.657 |       89.99 | 0.00032 |     3 | 130 ms | 170 ms | 23.0 MB |    530 ms |    660 ms |
+| jpegli  | -d 0.74     | 62.9 KB | 1.966 |       89.80 | 0.00025 |     7 |  20 ms |  10 ms |  7.4 MB |    130 ms |    120 ms |
+| HEIC    | -q 75       | 77.4 KB | 2.420 |       90.01 | 0.00017 |     2 | 490 ms | 480 ms | 27.0 MB |    1.37 s |    1.36 s |
+| WebP    | -q 99       | 85.2 KB | 2.662 |     89.44 * | 0.00023 |     7 |  50 ms |  40 ms |  6.3 MB |    540 ms |    490 ms |
+| mozjpeg | -quality 94 | 89.4 KB | 2.794 |       90.25 | 0.00024 |     4 | 100 ms | 100 ms |  5.6 MB |    340 ms |    330 ms |
++---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
 ```
 
 `iters` is the number of binary-search steps taken to reach the equal-quality
@@ -159,6 +161,8 @@ the target falls in the codec's range. For codec speed compare `encode`/`cpu`; f
 how much work the run spent, compare the totals. The CSV adds `total_encode_wall_ms`
 and `total_encode_cpu_ms`.
 
+`memory` is the encoder's peak resident memory during that single encode, as `/usr/bin/time` reports it (`-f %M` with GNU time, `-l` with BSD time on macOS), so the 512×512 photograph above (`cid22-friends.png` in the Docker image, `--time-runs 3`) needs 6–49 MB depending on the encoder. Memory grows with the image and with effort, and matters where many images are encoded in parallel, as on a build server. With `--time-runs`, it is the largest of the runs. The CSV adds `encode_peak_rss_bytes`, in bytes; it shows `n/a` (empty in the CSV) where `/usr/bin/time` is not available.
+
 Timing is a **single encode** at the target by default, which is noisy. Pass
 `--time-runs <n>` to encode n times and report the **median** of the wall and CPU
 times, which smooths the run-to-run variation at the cost of n encodes per codec:
@@ -167,7 +171,7 @@ times, which smooths the run-to-run variation at the cost of n encodes per codec
 compare-codecs reference.png --target 90 --time-runs 5
 ```
 
-Unlike the size and quality figures, timing is **not deterministic**: it depends on
+Unlike the size and quality figures, timing and memory are **not deterministic**: they depend on
 the machine, its load, and the tool versions and build flags. CPU time is the
 stabler of the two, but treat both as indicative, measure inside the Docker image on
 an idle machine for the most comparable numbers, and don't gate CI on them.

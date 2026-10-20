@@ -47,11 +47,27 @@ const TIME_BIN = "/usr/bin/time";
 const timingAvailable = existsSync(TIME_BIN);
 
 /**
- * Parse the stderr of `/usr/bin/time -p` into wall time and CPU time (user + sys)
- * in milliseconds. The POSIX `-p` format is a trailing block of `real`/`user`/`sys`
- * lines and is emitted by both GNU and BSD time, so this reads the last such block
- * and ignores any tool output printed before it. Returns nulls when it is absent.
- * @returns {{ wallMs: number | null, cpuMs: number | null }}
+ * The `/usr/bin/time` arguments that print the POSIX real/user/sys block plus the
+ * peak resident memory. GNU time takes a format (`%M` is in kilobytes); BSD time
+ * (macOS, the BSDs) adds a rusage report with `-l`, in bytes. Elsewhere only `-p`.
+ */
+function timeArgs() {
+  if (!timingAvailable) return null;
+  const version = spawnSync(TIME_BIN, ["--version"], { encoding: "utf8" });
+  if (/GNU/.test(`${version.stdout}${version.stderr}`)) return ["-f", "real %e\nuser %U\nsys %S\nmaxrss %M"];
+  if (/darwin|bsd/.test(process.platform)) return ["-l", "-p"];
+  return ["-p"];
+}
+const TIME_ARGS = timeArgs();
+
+/**
+ * Parse the stderr of `/usr/bin/time` into wall time and CPU time (user + sys) in
+ * milliseconds, and the peak resident memory in bytes. The POSIX `-p` format is a
+ * trailing block of `real`/`user`/`sys` lines, emitted by both GNU and BSD time, so
+ * this reads the last such block and ignores any tool output printed before it.
+ * Peak memory is GNU's `maxrss` line (kilobytes) or BSD's "maximum resident set
+ * size" (bytes). Returns nulls for what is absent.
+ * @returns {{ wallMs: number | null, cpuMs: number | null, peakBytes: number | null }}
  */
 export function parseTimeOutput(stderr) {
   const last = (key) => {
@@ -61,23 +77,27 @@ export function parseTimeOutput(stderr) {
   const real = last("real");
   const user = last("user");
   const sys = last("sys");
-  if (real === null || user === null || sys === null) return { wallMs: null, cpuMs: null };
-  return { wallMs: real * 1000, cpuMs: (user + sys) * 1000 };
+  const gnuKb = last("maxrss");
+  const bsd = [...stderr.matchAll(/^\s*(\d+)\s+maximum resident set size/gm)].at(-1);
+  const peakBytes = gnuKb !== null ? gnuKb * 1024 : bsd ? Number(bsd[1]) : null;
+  if (real === null || user === null || sys === null) return { wallMs: null, cpuMs: null, peakBytes };
+  return { wallMs: real * 1000, cpuMs: (user + sys) * 1000, peakBytes };
 }
 
 /**
- * Run a command under `/usr/bin/time -p` and return how long it took: wall time
- * and CPU time (user + sys) in milliseconds. Where `/usr/bin/time` is unavailable
- * the command still runs and timing is reported as null, so callers degrade
- * gracefully. Throws with stderr on failure, like run().
- * @returns {{ wallMs: number | null, cpuMs: number | null }}
+ * Run a command under `/usr/bin/time` and return how long it took, wall time and
+ * CPU time (user + sys) in milliseconds, and its peak resident memory in bytes.
+ * Where `/usr/bin/time` is unavailable the command still runs and these are
+ * reported as null, so callers degrade gracefully. Throws with stderr on failure,
+ * like run().
+ * @returns {{ wallMs: number | null, cpuMs: number | null, peakBytes: number | null }}
  */
 export function runTimed(cmd, args) {
   if (!timingAvailable) {
     run(cmd, args);
-    return { wallMs: null, cpuMs: null };
+    return { wallMs: null, cpuMs: null, peakBytes: null };
   }
-  const res = spawnSync(TIME_BIN, ["-p", cmd, ...args], {
+  const res = spawnSync(TIME_BIN, [...TIME_ARGS, cmd, ...args], {
     stdio: ["ignore", "ignore", "pipe"],
     encoding: "utf8",
   });
