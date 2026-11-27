@@ -98,16 +98,16 @@ The budget takes its unit explicitly: `KB` and `MB` are decimal (`30KB` is 30,00
 ```
 Budget: 30 KB = 30,000 bytes (equal size; compare quality, higher ssimulacra2 is better).
 
-+---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
-| Codec   | Setting      |     Size | of budget |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |   memory | enc total | cpu total |
-+---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
-| AVIF    | --min/max 31 | 29,224 B |     97.4% | 0.244 |       76.52 | 0.00105 |     6 | 530 ms | 660 ms | 135.4 MB |    5.92 s |    7.45 s |
-| HEIC    | -q 29        | 29,263 B |     97.5% | 0.244 |       61.80 | 0.00259 |     5 | 290 ms | 280 ms |  42.2 MB |    3.17 s |    3.13 s |
-| JPEG XL | -d 8.95      | 29,817 B |     99.4% | 0.248 |       54.81 | 0.00407 |     7 |  90 ms | 500 ms |  95.3 MB |    740 ms |    3.80 s |
-| WebP    | -q 33        | 29,934 B |     99.8% | 0.249 |       48.69 | 0.00486 |     6 |  40 ms |  40 ms |   8.6 MB |    280 ms |    250 ms |
-| mozjpeg | -quality 27  | 29,885 B |     99.6% | 0.249 |       31.16 | 0.01084 |     6 |  40 ms |  30 ms |   7.9 MB |    270 ms |    240 ms |
-| jpegli  | -d 14.97     | 30,395 B |  101.3% * | 0.253 |       23.55 | 0.01330 |     9 |  20 ms |  10 ms |  13.6 MB |    210 ms |    130 ms |
-+---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+-----------+-----------+-----------+
+| Codec   | Setting      |     Size | of budget |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |    memory | enc total | cpu total |
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+-----------+-----------+-----------+
+| AVIF    | --min/max 31 | 29,224 B |     97.4% | 0.244 |       76.52 | 0.00105 |     6 | 530 ms | 660 ms | 135.4 MiB |    5.92 s |    7.45 s |
+| HEIC    | -q 29        | 29,263 B |     97.5% | 0.244 |       61.80 | 0.00259 |     5 | 290 ms | 280 ms |  42.2 MiB |    3.17 s |    3.13 s |
+| JPEG XL | -d 8.95      | 29,817 B |     99.4% | 0.248 |       54.81 | 0.00407 |     7 |  90 ms | 500 ms |  95.3 MiB |    740 ms |    3.80 s |
+| WebP    | -q 33        | 29,934 B |     99.8% | 0.249 |       48.69 | 0.00486 |     6 |  40 ms |  40 ms |   8.6 MiB |    280 ms |    250 ms |
+| mozjpeg | -quality 27  | 29,885 B |     99.6% | 0.249 |       31.16 | 0.01084 |     6 |  40 ms |  30 ms |   7.9 MiB |    270 ms |    240 ms |
+| jpegli  | -d 14.97     | 30,395 B |  101.3% * | 0.253 |       23.55 | 0.01330 |     9 |  20 ms |  10 ms |  13.6 MiB |    210 ms |    130 ms |
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+-----------+-----------+-----------+
 
 * cannot fit the budget even at its lowest quality setting; smallest file shown.
 ```
@@ -165,16 +165,16 @@ sample images).
 An ASCII table (and optional CSV), sorted by file size so the smallest wins:
 
 ```
-+---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
-| Codec   | Setting     |    Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |  memory | enc total | cpu total |
-+---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
-| JPEG XL | -d 0.74     | 51.6 KB | 1.611 |       89.85 | 0.00027 |     7 |  60 ms | 260 ms | 48.9 MB |    760 ms |    2.95 s |
-| AVIF    | --min/max 8 | 53.0 KB | 1.657 |       89.99 | 0.00032 |     3 | 130 ms | 170 ms | 23.0 MB |    530 ms |    660 ms |
-| jpegli  | -d 0.74     | 62.9 KB | 1.966 |       89.80 | 0.00025 |     7 |  20 ms |  10 ms |  7.4 MB |    130 ms |    120 ms |
-| HEIC    | -q 75       | 77.4 KB | 2.420 |       90.01 | 0.00017 |     2 | 490 ms | 480 ms | 27.0 MB |    1.37 s |    1.36 s |
-| WebP    | -q 99       | 85.2 KB | 2.662 |     89.44 * | 0.00023 |     7 |  50 ms |  40 ms |  6.3 MB |    540 ms |    490 ms |
-| mozjpeg | -quality 94 | 89.4 KB | 2.794 |       90.25 | 0.00024 |     4 | 100 ms | 100 ms |  5.6 MB |    340 ms |    330 ms |
-+---------+-------------+---------+-------+-------------+---------+-------+--------+--------+---------+-----------+-----------+
++---------+-------------+----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
+| Codec   | Setting     |     Size |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |   memory | enc total | cpu total |
++---------+-------------+----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
+| JPEG XL | -d 0.74     | 51.6 KiB | 1.611 |       89.85 | 0.00027 |     7 |  60 ms | 260 ms | 48.9 MiB |    760 ms |    2.95 s |
+| AVIF    | --min/max 8 | 53.0 KiB | 1.657 |       89.99 | 0.00032 |     3 | 130 ms | 170 ms | 23.0 MiB |    530 ms |    660 ms |
+| jpegli  | -d 0.74     | 62.9 KiB | 1.966 |       89.80 | 0.00025 |     7 |  20 ms |  10 ms |  7.4 MiB |    130 ms |    120 ms |
+| HEIC    | -q 75       | 77.4 KiB | 2.420 |       90.01 | 0.00017 |     2 | 490 ms | 480 ms | 27.0 MiB |    1.37 s |    1.36 s |
+| WebP    | -q 99       | 85.2 KiB | 2.662 |     89.44 * | 0.00023 |     7 |  50 ms |  40 ms |  6.3 MiB |    540 ms |    490 ms |
+| mozjpeg | -quality 94 | 89.4 KiB | 2.794 |       90.25 | 0.00024 |     4 | 100 ms | 100 ms |  5.6 MiB |    340 ms |    330 ms |
++---------+-------------+----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
 ```
 
 `iters` is the number of binary-search steps taken to reach the equal-quality
@@ -195,7 +195,7 @@ the target falls in the codec's range. For codec speed compare `encode`/`cpu`; f
 how much work the run spent, compare the totals. The CSV adds `total_encode_wall_ms`
 and `total_encode_cpu_ms`.
 
-`memory` is the encoder's peak resident memory during that single encode, as `/usr/bin/time` reports it (`-f %M` with GNU time, `-l` with BSD time on macOS), so the 512×512 photograph above (`cid22-friends.png` in the Docker image, `--time-runs 3`) needs 6–49 MB depending on the encoder. Memory grows with the image and with effort, and matters where many images are encoded in parallel, as on a build server. With `--time-runs`, it is the largest of the runs. The CSV adds `encode_peak_rss_bytes`, in bytes; it shows `n/a` (empty in the CSV) where `/usr/bin/time` is not available.
+`memory` is the encoder's peak resident memory during that single encode, as `/usr/bin/time` reports it (`-f %M` with GNU time, `-l` with BSD time on macOS), so the 512×512 photograph above (`cid22-friends.png` in the Docker image, `--time-runs 3`) needs 6–49 MiB depending on the encoder. Memory grows with the image and with effort, and matters where many images are encoded in parallel, as on a build server. With `--time-runs`, it is the largest of the runs. The CSV adds `encode_peak_rss_bytes`, in bytes; it shows `n/a` (empty in the CSV) where `/usr/bin/time` is not available.
 
 Timing is a **single encode** at the target by default, which is noisy. Pass
 `--time-runs <n>` to encode n times and report the **median** of the wall and CPU
@@ -248,13 +248,13 @@ compare-codecs images/ --target 90 --codecs webp,webp-sharp
 
 | Image | WebP | WebP sharp YUV |
 | --- | --- | --- |
-| `cid22-friends.png` (photo, people) | 85.2 KB, 89.4 * | **76.5 KB**, 89.9 |
-| `cid22-church.png` (photo, detail) | 92.0 KB, 88.9 * | **83.4 KB**, 89.6 |
-| `cid22-blossoms.png` (photo, color) | 115.4 KB, 76.9 * | 119.4 KB, **85.9** * |
-| `forest-leaves.png` (texture) | 735.8 KB, 89.5 | **657.9 KB**, 90.3 (−11%) |
-| `corporate-memphis.png` (illustration) | 45.7 KB, 85.9 * | 45.8 KB, **89.5** |
-| `report-ui.png` (UI, text) | 114.8 KB, 77.4 * | 123.4 KB, **89.4** * |
-| `pipeline-diagram.png` (diagram) | 61.6 KB, 73.5 * | 70.9 KB, **86.2** * |
+| `cid22-friends.png` (photo, people) | 85.2 KiB, 89.4 * | **76.5 KiB**, 89.9 |
+| `cid22-church.png` (photo, detail) | 92.0 KiB, 88.9 * | **83.4 KiB**, 89.6 |
+| `cid22-blossoms.png` (photo, color) | 115.4 KiB, 76.9 * | 119.4 KiB, **85.9** * |
+| `forest-leaves.png` (texture) | 735.8 KiB, 89.5 | **657.9 KiB**, 90.3 (−11%) |
+| `corporate-memphis.png` (illustration) | 45.7 KiB, 85.9 * | 45.8 KiB, **89.5** |
+| `report-ui.png` (UI, text) | 114.8 KiB, 77.4 * | 123.4 KiB, **89.4** * |
+| `pipeline-diagram.png` (diagram) | 61.6 KiB, 73.5 * | 70.9 KiB, **86.2** * |
 
 Plain WebP reaches the target only on the texture, where sharp YUV is 11% smaller at the same quality. On every other image plain WebP stops short even at `-q 99`–`100`, photographs included, and sharp YUV raises the ceiling: on the people and church photographs it reaches the target with 9–10% fewer bytes than plain WebP's best attempt, and on the UI screenshot it lifts the score from 77 to 89. Where it still falls short, the extra bytes buy quality that was unreachable before, so those rows are not a size comparison. Encoding takes about 1.2–2× as long.
 
@@ -272,13 +272,13 @@ Plain WebP reaches the target only on the texture, where sharp YUV is 11% smalle
 
 | Image | HEIC (4:2:0) | HEIC 4:4:4 |
 | --- | --- | --- |
-| `cid22-friends.png` (photo, people) | 77.4 KB, 90.0 | **47.9 KB**, 90.1 (−38%) |
-| `cid22-church.png` (photo, detail) | **69.3 KB**, 90.1 | 72.7 KB, 90.4 (+5%) |
-| `cid22-blossoms.png` (photo, color) | 190.3 KB, 82.3 * | **124.1 KB**, 90.0 |
-| `forest-leaves.png` (texture) | 696.5 KB, 90.5 | 683.8 KB, 90.2 (−2%) |
-| `corporate-memphis.png` (illustration) | 67.1 KB, 88.0 * | **25.0 KB**, 89.7 |
-| `report-ui.png` (UI, text) | 194.3 KB, 83.2 * | **82.1 KB**, 90.2 |
-| `pipeline-diagram.png` (diagram) | 94.8 KB, 73.4 * | **84.2 KB**, 89.7 |
+| `cid22-friends.png` (photo, people) | 77.4 KiB, 90.0 | **47.9 KiB**, 90.1 (−38%) |
+| `cid22-church.png` (photo, detail) | **69.3 KiB**, 90.1 | 72.7 KiB, 90.4 (+5%) |
+| `cid22-blossoms.png` (photo, color) | 190.3 KiB, 82.3 * | **124.1 KiB**, 90.0 |
+| `forest-leaves.png` (texture) | 696.5 KiB, 90.5 | 683.8 KiB, 90.2 (−2%) |
+| `corporate-memphis.png` (illustration) | 67.1 KiB, 88.0 * | **25.0 KiB**, 89.7 |
+| `report-ui.png` (UI, text) | 194.3 KiB, 83.2 * | **82.1 KiB**, 90.2 |
+| `pipeline-diagram.png` (diagram) | 94.8 KiB, 73.4 * | **84.2 KiB**, 89.7 |
 
 4:4:4 reaches the target on all seven images, against three for 4:2:0. It is 38% smaller on the people photograph, and on the UI screenshot it is 58% smaller *and* reaches a quality 4:2:0 cannot. It is larger only on the church photograph (+5%), where halving the color resolution loses little and 4:2:0 keeps its byte advantage. Elsewhere, at this quality level, halving the color resolution does not save bytes; it costs them, because the search has to raise the quality setting to win back the lost color (`-q 94–97` for 4:2:0 against `-q 57–75` for 4:4:4 on the four images 4:2:0 cannot reach). Encoding takes up to about 1.4× as long.
 
@@ -298,13 +298,13 @@ Plain WebP reaches the target only on the texture, where sharp YUV is 11% smalle
 
 | Image | AVIF (aom) | AVIF rav1e | Encode time |
 | --- | --- | --- | --- |
-| `cid22-friends.png` (photo, people) | 53.0 KB, 90.0 | **51.8 KB**, 90.2 (−2%) | 130 ms → 1.00 s |
-| `cid22-church.png` (photo, detail) | 66.5 KB, 89.7 | **64.6 KB**, 89.7 (−3%) | 130 ms → 980 ms |
-| `cid22-blossoms.png` (photo, color) | **125.0 KB**, 89.7 | 130.4 KB, 90.0 (+4%) | 190 ms → 1.60 s |
-| `forest-leaves.png` (texture) | 805.2 KB, 90.4 | **771.2 KB**, 90.2 (−4%) | 560 ms → 7.55 s |
-| `corporate-memphis.png` (illustration) | **18.7 KB**, 89.9 | 26.6 KB, 90.5 (+43%) | 70 ms → 1.84 s |
-| `report-ui.png` (UI, text) | **62.6 KB**, 89.9 | 105.5 KB, 90.2 (+69%) | 1.26 s → 2.84 s |
-| `pipeline-diagram.png` (diagram) | **61.3 KB**, 90.1 | 88.5 KB, 90.0 (+44%) | 110 ms → 2.35 s |
+| `cid22-friends.png` (photo, people) | 53.0 KiB, 90.0 | **51.8 KiB**, 90.2 (−2%) | 130 ms → 1.00 s |
+| `cid22-church.png` (photo, detail) | 66.5 KiB, 89.7 | **64.6 KiB**, 89.7 (−3%) | 130 ms → 980 ms |
+| `cid22-blossoms.png` (photo, color) | **125.0 KiB**, 89.7 | 130.4 KiB, 90.0 (+4%) | 190 ms → 1.60 s |
+| `forest-leaves.png` (texture) | 805.2 KiB, 90.4 | **771.2 KiB**, 90.2 (−4%) | 560 ms → 7.55 s |
+| `corporate-memphis.png` (illustration) | **18.7 KiB**, 89.9 | 26.6 KiB, 90.5 (+43%) | 70 ms → 1.84 s |
+| `report-ui.png` (UI, text) | **62.6 KiB**, 89.9 | 105.5 KiB, 90.2 (+69%) | 1.26 s → 2.84 s |
+| `pipeline-diagram.png` (diagram) | **61.3 KiB**, 90.1 | 88.5 KiB, 90.0 (+44%) | 110 ms → 2.35 s |
 
 On photographs and the texture rav1e is within a few percent of aom, slightly smaller on three of the four. On flat graphics and text aom is far ahead, 43–69% smaller. rav1e is also 2–26× slower here, and its CPU time equals its wall time, so it ran on one core, while aom spread the same work over several.
 
@@ -324,13 +324,13 @@ On photographs and the texture rav1e is within a few percent of aom, slightly sm
 
 | Image | AVIF (aom, 4:4:4) | aom 4:2:0 | AVIF SVT-AV1 (4:2:0) |
 | --- | --- | --- | --- |
-| `cid22-friends.png` (photo, people) | **53.0 KB**, 90.0 | 62.9 KB, 89.5 | 72.2 KB, 89.7 |
-| `cid22-church.png` (photo, detail) | **66.5 KB**, 89.7 | 87.1 KB, 90.3 | 71.9 KB, 89.7 |
-| `cid22-blossoms.png` (photo, color) | **125.0 KB**, 89.7 | 202.9 KB, 78.6 * | 166.7 KB, 78.4 * |
-| `forest-leaves.png` (texture) | 805.2 KB, 90.4 | **779.3 KB**, 90.4 | 839.0 KB, 90.5 |
-| `corporate-memphis.png` (illustration) | **18.7 KB**, 89.9 | 56.3 KB, 87.8 * | 43.6 KB, 87.7 * |
-| `report-ui.png` (UI, text) | **62.6 KB**, 89.9 | 156.4 KB, 78.8 * | 104.2 KB, 78.7 * |
-| `pipeline-diagram.png` (diagram) | **61.3 KB**, 90.1 | 57.3 KB, 75.4 * | failed (odd height) |
+| `cid22-friends.png` (photo, people) | **53.0 KiB**, 90.0 | 62.9 KiB, 89.5 | 72.2 KiB, 89.7 |
+| `cid22-church.png` (photo, detail) | **66.5 KiB**, 89.7 | 87.1 KiB, 90.3 | 71.9 KiB, 89.7 |
+| `cid22-blossoms.png` (photo, color) | **125.0 KiB**, 89.7 | 202.9 KiB, 78.6 * | 166.7 KiB, 78.4 * |
+| `forest-leaves.png` (texture) | 805.2 KiB, 90.4 | **779.3 KiB**, 90.4 | 839.0 KiB, 90.5 |
+| `corporate-memphis.png` (illustration) | **18.7 KiB**, 89.9 | 56.3 KiB, 87.8 * | 43.6 KiB, 87.7 * |
+| `report-ui.png` (UI, text) | **62.6 KiB**, 89.9 | 156.4 KiB, 78.8 * | 104.2 KiB, 78.7 * |
+| `pipeline-diagram.png` (diagram) | **61.3 KiB**, 90.1 | 57.3 KiB, 75.4 * | failed (odd height) |
 
 At matched 4:2:0, SVT-AV1 and aom trade places on the photographs (+15% on the people photograph, −17% on the church), and where 4:2:0 cannot reach the target, on the blossoms photograph, the UI screenshot and the illustration, SVT-AV1 reaches the same quality ceiling with fewer bytes (−18%, −33% and −22%). What holds it back is the chroma format, not the encoder: forcing aom to 4:2:0 costs it as much (+19% and +31% on the people and church photographs, and the blossoms photograph, the illustration, the UI and the diagram no longer reach the target). Encode times at the default speed are similar to aom's here.
 
@@ -348,13 +348,13 @@ At matched 4:2:0, SVT-AV1 and aom trade places on the photographs (+15% on the p
 
 | Image | libjpeg-turbo | mozjpeg | jpegli |
 | --- | --- | --- | --- |
-| `cid22-friends.png` (photo, people) | 82.3 KB, 89.6 | 89.4 KB, 90.2 (+9%) | **62.9 KB**, 89.8 (−24%) |
-| `cid22-church.png` (photo, detail) | 103.7 KB, 90.3 | 97.0 KB, 89.9 (−7%) | **76.4 KB**, 89.7 (−26%) |
-| `cid22-blossoms.png` (photo, color) | 219.0 KB, 78.7 * | 160.4 KB, 90.2 | **133.8 KB**, 90.1 |
-| `forest-leaves.png` (texture) | 919.6 KB, 90.3 | 1093.7 KB, 89.6 (+19%) | **724.5 KB**, 89.9 (−21%) |
-| `corporate-memphis.png` (illustration) | 127.8 KB, 88.1 * | 97.8 KB, 89.6 | **78.5 KB**, 89.9 |
-| `report-ui.png` (UI, text) | 302.8 KB, 78.8 * | 213.3 KB, 90.2 | **165.5 KB**, 89.9 |
-| `pipeline-diagram.png` (diagram) | 177.5 KB, 75.7 * | 176.5 KB, 89.9 | **111.0 KB**, 89.3 * |
+| `cid22-friends.png` (photo, people) | 82.3 KiB, 89.6 | 89.4 KiB, 90.2 (+9%) | **62.9 KiB**, 89.8 (−24%) |
+| `cid22-church.png` (photo, detail) | 103.7 KiB, 90.3 | 97.0 KiB, 89.9 (−7%) | **76.4 KiB**, 89.7 (−26%) |
+| `cid22-blossoms.png` (photo, color) | 219.0 KiB, 78.7 * | 160.4 KiB, 90.2 | **133.8 KiB**, 90.1 |
+| `forest-leaves.png` (texture) | 919.6 KiB, 90.3 | 1093.7 KiB, 89.6 (+19%) | **724.5 KiB**, 89.9 (−21%) |
+| `corporate-memphis.png` (illustration) | 127.8 KiB, 88.1 * | 97.8 KiB, 89.6 | **78.5 KiB**, 89.9 |
+| `report-ui.png` (UI, text) | 302.8 KiB, 78.8 * | 213.3 KiB, 90.2 | **165.5 KiB**, 89.9 |
+| `pipeline-diagram.png` (diagram) | 177.5 KiB, 75.7 * | 176.5 KiB, 89.9 | **111.0 KiB**, 89.3 * |
 
 jpegli is the smallest on every image, 21–45% below libjpeg-turbo. libjpeg-turbo cannot reach the target on the three graphics images and the blossoms photograph, even at its highest settings (`-quality 99`–`100`). And mozjpeg, the "improved" encoder, is *larger* than plain libjpeg-turbo on the people photograph (+9%) and the texture (+19%).
 

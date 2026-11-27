@@ -12,15 +12,17 @@ const measuredFirst = (results) => [
 const failureNotes = (failures) =>
   failures.length ? ["", ...failures.map((f) => `† ${f.name} failed${f.at ?? ""}: ${f.error}`)] : [];
 
+// Sizes are divided by 1024, so they carry the binary units (KiB, MiB): "KB" means
+// 1000 bytes, the unit a --target-bytes budget such as 50KB is given in.
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024).toFixed(1)} KiB`;
 }
 
-/** Format a peak memory size in MB, or "n/a" when it was not measured. */
+/** Format a peak memory size in MiB, or "n/a" when it was not measured. */
 function formatMemory(bytes) {
   if (bytes === null || bytes === undefined) return "n/a";
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 /** Format a duration in ms for a human: "n/a" when unmeasured, ms under a second, else seconds. */
