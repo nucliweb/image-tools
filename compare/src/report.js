@@ -260,3 +260,126 @@ export function toRdCsv(perImageRd) {
   }
   return [head, ...lines].join("\n");
 }
+
+const formatExactBytes = (bytes) => `${bytes.toLocaleString("en-US")} B`;
+const budgetLine = (meta) => `${meta.budgetLabel} = ${meta.budgetBytes.toLocaleString("en-US")} bytes`;
+
+/**
+ * Budget results in display order: the codecs that fit, best quality first; then
+ * those over the budget (smallest first, the closest to fitting); then failures.
+ */
+const budgetOrder = (results) => {
+  const measured = results.filter((r) => !r.failed);
+  return [
+    ...measured.filter((r) => r.fits).sort((a, b) => b.ssimulacra2 - a.ssimulacra2),
+    ...measured.filter((r) => !r.fits).sort(bySizeAscending),
+    ...results.filter((r) => r.failed),
+  ];
+};
+
+/**
+ * Render budget results (every codec searched to the largest file that fits a byte
+ * budget) as an ASCII table: equal size, so the comparison is by quality, best
+ * first. A codec that could not fit the budget is flagged and ranked after the rest.
+ */
+export function toBudgetTable(results, meta) {
+  const rows = budgetOrder(results);
+  const columns = [
+    { header: "Codec", align: "left" },
+    { header: "Setting", align: "left" },
+    { header: "Size", align: "right" },
+    { header: "of budget", align: "right" },
+    { header: "bpp", align: "right" },
+    { header: "ssimulacra2", align: "right" },
+    { header: "dssim", align: "right" },
+    { header: "iters", align: "right" },
+    { header: "encode", align: "right" },
+    { header: "cpu", align: "right" },
+    { header: "memory", align: "right" },
+    { header: "enc total", align: "right" },
+    { header: "cpu total", align: "right" },
+  ];
+  const body = rows.map((r) =>
+    r.failed
+      ? [r.name, "—", "failed", ...Array(columns.length - 3).fill("—")]
+      : [
+          r.name,
+          r.label,
+          formatExactBytes(r.bytes),
+          `${((r.bytes / meta.budgetBytes) * 100).toFixed(1)}%${r.fits ? "" : " *"}`,
+          r.bpp.toFixed(3),
+          r.ssimulacra2.toFixed(2),
+          r.dssim.toFixed(5),
+          String(r.iterations),
+          formatDuration(r.encodeWallMs),
+          formatDuration(r.encodeCpuMs),
+          formatMemory(r.encodePeakBytes),
+          formatDuration(r.totalEncodeWallMs),
+          formatDuration(r.totalEncodeCpuMs),
+        ],
+  );
+  const heading = [
+    `Codec comparison — ${meta.reference} (${meta.width}×${meta.height})`,
+    `Budget: ${budgetLine(meta)} (equal size; compare quality, higher ssimulacra2 is better).`,
+    ...(meta.effort === null || meta.effort === undefined
+      ? []
+      : [`Effort: ${meta.effort} (matched where supported; codecs without an effort knob use their default).`]),
+    "",
+  ];
+  const footnote = rows.some((r) => !r.failed && !r.fits)
+    ? ["", "* cannot fit the budget even at its lowest quality setting; smallest file shown."]
+    : [];
+  const failures = failureNotes(rows.filter((r) => r.failed));
+  return [...heading, asciiTable(columns, body), ...footnote, ...failures].join("\n");
+}
+
+const formatPoints = (delta) => (delta === null ? "n/a" : `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`);
+
+/** Render the per-codec budget summary over a batch of images as an ASCII table. */
+export function toBudgetAggregateTable(rows, meta) {
+  const baseline = meta.baselineName ?? "baseline";
+  const columns = [
+    { header: "Codec", align: "left" },
+    { header: "avg ssimulacra2", align: "right" },
+    { header: "wins", align: "right" },
+    { header: `vs ${baseline}`, align: "right" },
+    { header: "fits budget", align: "right" },
+  ];
+  const body = rows.map((r) => [
+    r.name,
+    r.avgScore === null ? "n/a" : r.avgScore.toFixed(2),
+    String(r.wins),
+    r.id === meta.baselineId ? "baseline" : formatPoints(r.deltaVsBaseline),
+    `${r.fits}/${r.count}`,
+  ]);
+  const compared = rows[0]?.compared ?? 0;
+  const scope =
+    compared > 0
+      ? `Averages and the difference from ${baseline} (in ssimulacra2 points) cover the ${compared} of ${meta.imageCount} images where every codec fits; wins and fits count every image.`
+      : "No image fits the budget with every codec, so there are no averages to compare; wins and fits count every image.";
+  const heading = [`Budget summary — ${meta.imageCount} images, budget ${budgetLine(meta)}`, scope, ""];
+  return [...heading, asciiTable(columns, body)].join("\n");
+}
+
+const BUDGET_FIELDS = [
+  (r) => csvField(r.label),
+  (r) => r.budgetBytes,
+  (r) => r.bytes,
+  (r) => r.bpp.toFixed(4),
+  (r) => r.ssimulacra2.toFixed(4),
+  (r) => r.dssim.toFixed(6),
+  (r) => r.fits,
+  ...SINGLE_FIELDS.slice(5),
+];
+
+/** Render budget results as CSV, one row per (image, codec), in table order. */
+export function toBudgetCsv(perImage) {
+  const head =
+    "image,codec,setting,budget_bytes,bytes,bpp,ssimulacra2,dssim,fits,iterations," +
+    "encode_wall_ms,encode_cpu_ms,total_encode_wall_ms,total_encode_cpu_ms,encode_peak_rss_bytes,error";
+  const lines = [];
+  for (const { image, results } of perImage) {
+    for (const r of budgetOrder(results)) lines.push(`${csvField(image)},${csvRow(r, BUDGET_FIELDS)}`);
+  }
+  return [head, ...lines].join("\n");
+}

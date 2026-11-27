@@ -4,13 +4,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { CODECS, DEFAULT_CODECS, resolveCodecIds } from "../src/codecs.js";
-import { findQualityForTarget } from "../src/pipeline.js";
+import { findQualityForTarget, findQualityForBudget } from "../src/pipeline.js";
 import { pngDimensions, writeStrippedPng, pngDataUri } from "../src/image.js";
 import { run, resolveCommand, failureReason } from "../src/exec.js";
-import { collectImages, aggregate } from "../src/batch.js";
+import { collectImages, aggregate, aggregateBudget } from "../src/batch.js";
 import { sweepCodec } from "../src/sweep.js";
 import { buildHtml } from "../src/report-html.js";
 import { parseTargets, aggregateBdRates, imageBdRates } from "../src/rd.js";
+import { parseByteSize } from "../src/budget.js";
 import {
   toComparisonTable,
   toCsv,
@@ -19,6 +20,9 @@ import {
   toRdTable,
   toRdAggregateTable,
   toRdCsv,
+  toBudgetTable,
+  toBudgetAggregateTable,
+  toBudgetCsv,
 } from "../src/report.js";
 
 const USAGE = `Usage: compare-codecs <image-or-dir...> [options]
@@ -34,10 +38,15 @@ Options:
   -c, --codecs <list>       Comma-separated (default: ${DEFAULT_CODECS.join(",")}); opt-in
                             variants: ${Object.keys(CODECS).filter((id) => !DEFAULT_CODECS.includes(id)).join(",")};
                             "all" runs every codec and variant
-      --tolerance <n>       Stop when within this of the target (default: 0.5)
+      --tolerance <n>       Stop when within this of the target (default: 0.5); budget
+                            mode stops within 1% under the budget
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
+      --target-bytes <size> Budget mode: search every codec for the largest file that
+                            fits this size (50KB = 50,000 bytes, 50KiB = 51,200, or a
+                            bare byte count) and compare the ssimulacra2 each reaches.
+                            Replaces --target; not available with --rd or --html
       --rd <list>           Rate-distortion mode: search every codec at each of these
                             targets (e.g. 70,80,85,90,95), report bpp per target and
                             BD-rate vs mozjpeg. With --html, the report plots these
@@ -60,7 +69,10 @@ function parse() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-      target: { type: "string", short: "t", default: "90" },
+      // No default here, so an explicit --target can be told apart from the 90
+      // applied in main() and rejected alongside --target-bytes.
+      target: { type: "string", short: "t" },
+      "target-bytes": { type: "string" },
       codecs: { type: "string", short: "c" },
       tolerance: { type: "string", default: "0.5" },
       "max-iterations": { type: "string", default: "10" },
@@ -85,7 +97,7 @@ function main() {
     process.exit(values.help ? 0 : 1);
   }
 
-  const target = Number(values.target);
+  const target = Number(values.target ?? "90");
   const tolerance = Number(values.tolerance);
   const maxIterations = Number(values["max-iterations"]);
   const timeRuns = Math.max(1, Math.floor(Number(values["time-runs"])) || 1);
@@ -101,6 +113,28 @@ function main() {
   if (values.rd !== undefined) {
     try {
       rdTargets = parseTargets(values.rd);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  }
+  let budget = null;
+  if (values["target-bytes"] !== undefined) {
+    // Equal size and equal quality are two different comparisons: one run makes one.
+    const conflict =
+      values.target !== undefined
+        ? "--target-bytes and --target are two modes (equal size, equal quality); use one."
+        : rdTargets
+          ? "--target-bytes and --rd are two modes (equal size, equal-quality curves); use one."
+          : values.html
+            ? "--html is not available with --target-bytes: the report compares codecs at equal quality."
+            : null;
+    if (conflict) {
+      console.error(conflict);
+      process.exit(1);
+    }
+    try {
+      budget = parseByteSize(values["target-bytes"]);
     } catch (err) {
       console.error(err.message);
       process.exit(1);
@@ -145,6 +179,10 @@ function main() {
     const searchOpts = { tolerance, maxIterations, timeRuns, effort };
     const baselineId = ids.includes("mozjpeg") ? "mozjpeg" : ids[0];
     const baselineName = CODECS[baselineId]?.name ?? baselineId;
+    if (budget) {
+      runBudget(images, ids, budget, workdir, searchOpts, { baselineId, baselineName, csv: values.csv, effort });
+      return;
+    }
     if (rdTargets) {
       runRd(images, ids, rdTargets, workdir, searchOpts, { baselineId, baselineName, csv: values.csv, html: values.html, target, embed });
       return;
@@ -155,15 +193,9 @@ function main() {
     const perImage = [];
     const report = { target, images: [] };
     images.forEach((image, idx) => {
-      const refNorm = join(workdir, `img${idx}.norm.png`);
-      let dims;
-      try {
-        writeStrippedPng(image, refNorm);
-        dims = pngDimensions(refNorm);
-      } catch {
-        process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
-        return;
-      }
+      const prepared = prepareReference(image, idx, workdir);
+      if (!prepared) return;
+      const { refNorm, dims } = prepared;
 
       process.stderr.write(`# ${basename(image)}\n`);
       const results = [];
@@ -253,6 +285,68 @@ function main() {
 }
 
 /**
+ * Normalize one input image into the work directory (critical chunks only, the
+ * reference every codec is measured against) and read its size. Returns null, after
+ * saying so, for a file that is not a usable PNG, so a batch skips it and goes on.
+ */
+function prepareReference(image, idx, workdir) {
+  const refNorm = join(workdir, `img${idx}.norm.png`);
+  try {
+    writeStrippedPng(image, refNorm);
+    return { refNorm, dims: pngDimensions(refNorm) };
+  } catch {
+    process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
+    return null;
+  }
+}
+
+/**
+ * Budget mode: search every codec on every image for the largest file that fits
+ * the byte budget, then print one table per image (quality at equal size), a batch
+ * summary, and optionally a CSV.
+ */
+function runBudget(images, ids, budget, workdir, searchOpts, { baselineId, baselineName, csv, effort }) {
+  const perImage = [];
+  images.forEach((image, idx) => {
+    const prepared = prepareReference(image, idx, workdir);
+    if (!prepared) return;
+    const { refNorm, dims } = prepared;
+
+    process.stderr.write(`# ${basename(image)}\n`);
+    const results = ids.map((id) => {
+      const codec = CODECS[id];
+      process.stderr.write(`  → ${codec.name} …\n`);
+      try {
+        return findQualityForBudget(codec, image, budget.bytes, workdir, { ...searchOpts, referenceNorm: refNorm });
+      } catch (err) {
+        const error = failureReason(err);
+        process.stderr.write(`  ! ${codec.name} failed on ${basename(image)}: ${error}\n`);
+        return { id, name: codec.name, failed: true, error };
+      }
+    });
+    perImage.push({ image: basename(image), width: dims.width, height: dims.height, results });
+  });
+
+  if (perImage.length === 0) {
+    console.error("No usable PNG images.");
+    process.exit(1);
+  }
+
+  const meta = { budgetBytes: budget.bytes, budgetLabel: budget.label, effort };
+  console.log(perImage.map((p) => toBudgetTable(p.results, { ...meta, reference: p.image, width: p.width, height: p.height })).join("\n\n"));
+
+  if (perImage.length > 1) {
+    const rows = aggregateBudget(perImage, { baselineId });
+    console.log(`\n${toBudgetAggregateTable(rows, { ...meta, imageCount: perImage.length, baselineId, baselineName })}`);
+  }
+
+  if (csv) {
+    writeFileSync(csv, `${toBudgetCsv(perImage)}\n`);
+    process.stderr.write(`Wrote ${csv}\n`);
+  }
+}
+
+/**
  * Rate-distortion mode: run the equal-quality search for every image, codec and
  * target, then print one RD table per image (bpp per target and BD-rate vs the
  * baseline), a mean BD-rate summary for a batch, and optionally a long CSV and
@@ -266,15 +360,9 @@ function runRd(images, ids, targets, workdir, searchOpts, { baselineId, baseline
   const perImage = [];
   const reportImages = [];
   images.forEach((image, idx) => {
-    const refNorm = join(workdir, `img${idx}.norm.png`);
-    let dims;
-    try {
-      writeStrippedPng(image, refNorm);
-      dims = pngDimensions(refNorm);
-    } catch {
-      process.stderr.write(`Skipping (not a PNG in sRGB): ${image}\n`);
-      return;
-    }
+    const prepared = prepareReference(image, idx, workdir);
+    if (!prepared) return;
+    const { refNorm, dims } = prepared;
 
     process.stderr.write(`# ${basename(image)}\n`);
     const previews = new Map();

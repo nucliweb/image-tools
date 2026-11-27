@@ -49,3 +49,59 @@ export function searchForTarget({
 
   return best;
 }
+
+/**
+ * Binary-search a quality knob for the largest encoded size that fits a byte
+ * budget. The size is assumed monotonic in the knob in the same direction as the
+ * score (`increasing` as for searchForTarget), since a higher quality costs bytes.
+ *
+ * The constraint is one-sided: an evaluation over the budget is never returned
+ * while one under it has been seen. When nothing fits, the smallest file seen is
+ * returned with `fits: false`, so a budget below the codec's range resolves to its
+ * lowest-quality end.
+ *
+ * @param {object} opts
+ * @param {number} opts.lo
+ * @param {number} opts.hi
+ * @param {number} opts.budget        Maximum size in bytes.
+ * @param {number} [opts.tolerance]   Stop once the size is within this many bytes
+ *                                    under the budget (default: 1% of the budget).
+ * @param {number} [opts.maxIterations]
+ * @param {boolean} [opts.increasing] Whether the size increases with the knob.
+ * @param {(knob: number) => number} opts.evaluate  Encodes at a knob, returns bytes.
+ * @returns {{ value: number, bytes: number, iterations: number, fits: boolean }}
+ */
+export function searchForBudget({
+  lo,
+  hi,
+  budget,
+  tolerance = budget * 0.01,
+  maxIterations = 12,
+  increasing = true,
+  evaluate,
+}) {
+  let best = null;
+
+  for (let i = 0; i < maxIterations; i += 1) {
+    const mid = (lo + hi) / 2;
+    const bytes = evaluate(mid);
+    const fits = bytes <= budget;
+
+    const better = fits
+      ? best === null || !best.fits || bytes > best.bytes
+      : best === null || (!best.fits && bytes < best.bytes);
+    if (better) best = { value: mid, bytes, iterations: i + 1, fits };
+
+    if (fits && budget - bytes <= tolerance) break;
+
+    // Under the budget there is room for more quality; over it, less.
+    const raiseKnob = increasing === fits;
+    if (raiseKnob) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+
+  return best;
+}

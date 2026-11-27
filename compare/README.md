@@ -43,6 +43,7 @@ Options:
 | `--max-iterations <n>` | `10` | Maximum search steps per codec |
 | `--effort <0..10>` | codec default | Matched encoder effort across codecs that have the knob (higher = slower) |
 | `--time-runs <n>` | `1` | Time each codec's encode n times and report the median |
+| `--target-bytes <size>` | — | [Budget mode](#budget-mode): search each codec for the largest file that fits this size (`50KB` = 50,000 bytes, `50KiB` = 51,200, or a bare byte count) and compare quality; replaces `--target`, not available with `--rd` or `--html` |
 | `--rd <list>` | — | Rate-distortion mode: search each codec at every target in the list; with `--html`, the report shows the encodes at the target closest to `--target` |
 | `--csv <path>` | — | Also write the results as CSV |
 | `--html <path>` | — | Write an interactive, self-contained HTML report |
@@ -83,6 +84,39 @@ compare-codecs images/ --rd 70,80,85,90,95 --html rd.html
 ```
 
 Its chart dots are the equal-quality encodes at each target, the same points as the table and the CSV, and the readout under the chart and the across-all-images summary add each codec's BD-rate and mean BD-rate. The viewer shows each codec's encode at the target closest to `--target` (90 by default), so pass a list that includes the quality you want to inspect.
+
+## Budget mode
+
+The default comparison fixes the quality and compares sizes. A web performance budget asks the inverse question: with **50 KB to spend**, which codec looks best? `--target-bytes` searches each codec's quality knob for the largest file that fits the budget, then compares the ssimulacra2 each one reaches there:
+
+```bash
+compare-codecs images/ --target-bytes 30KB --csv budget.csv
+```
+
+The budget takes its unit explicitly: `KB` and `MB` are decimal (`30KB` is 30,000 bytes), `KiB` and `MiB` are binary (`30KiB` is 30,720 bytes), and a bare number is a byte count. Each table states the budget both ways, gives sizes in exact bytes, and ranks codecs by quality, best first:
+
+```
+Budget: 30 KB = 30,000 bytes (equal size; compare quality, higher ssimulacra2 is better).
+
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
+| Codec   | Setting      |     Size | of budget |   bpp | ssimulacra2 |   dssim | iters | encode |    cpu |   memory | enc total | cpu total |
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
+| AVIF    | --min/max 31 | 29,224 B |     97.4% | 0.244 |       76.52 | 0.00105 |     6 | 530 ms | 660 ms | 135.4 MB |    5.92 s |    7.45 s |
+| HEIC    | -q 29        | 29,263 B |     97.5% | 0.244 |       61.80 | 0.00259 |     5 | 290 ms | 280 ms |  42.2 MB |    3.17 s |    3.13 s |
+| JPEG XL | -d 8.95      | 29,817 B |     99.4% | 0.248 |       54.81 | 0.00407 |     7 |  90 ms | 500 ms |  95.3 MB |    740 ms |    3.80 s |
+| WebP    | -q 33        | 29,934 B |     99.8% | 0.249 |       48.69 | 0.00486 |     6 |  40 ms |  40 ms |   8.6 MB |    280 ms |    250 ms |
+| mozjpeg | -quality 27  | 29,885 B |     99.6% | 0.249 |       31.16 | 0.01084 |     6 |  40 ms |  30 ms |   7.9 MB |    270 ms |    240 ms |
+| jpegli  | -d 14.97     | 30,395 B |  101.3% * | 0.253 |       23.55 | 0.01330 |     9 |  20 ms |  10 ms |  13.6 MB |    210 ms |    130 ms |
++---------+--------------+----------+-----------+-------+-------------+---------+-------+--------+--------+----------+-----------+-----------+
+
+* cannot fit the budget even at its lowest quality setting; smallest file shown.
+```
+
+That is `report-ui.png`, the 1200×800 UI screenshot, in the Docker image. At 30 KB, AVIF keeps it at ssimulacra2 76.5, while mozjpeg falls to 31.2. `of budget` is the share of the budget the file uses: the search stops within 1% under the budget, but a codec whose quality knob moves in coarse steps can land lower, since the next step up would exceed it. A file over the budget is never chosen while one under it exists. When even the codec's lowest quality setting is over the budget, as for jpegli here, the row shows that smallest file, flagged `*`, and ranks after every codec that fits.
+
+With more than one image, a **budget summary** follows: each codec's average ssimulacra2, its wins (the best quality among the codecs that fit an image), its mean difference in ssimulacra2 points from mozjpeg, and on how many images it fits. The averages and the difference cover only the images where **every** codec fits, the same images for all, and the summary says how many those are: averaging each codec over its own images would rank them on different sets and reward a codec for failing to fit the hardest ones. `--csv` writes one row per image and codec (`image,codec,setting,budget_bytes,bytes,bpp,ssimulacra2,dssim,fits,iterations`, then the timing columns and `error`).
+
+The search only needs the file size, so it encodes without decoding or measuring, and decodes and scores once, at the chosen setting; on the seven demo images, a 30 KB budget run takes about half as long as an equal-quality run at the default target (29 s against 63 s on an Apple Silicon laptop). `--codecs`, `--effort`, `--time-runs` and `--max-iterations` apply as usual; `--tolerance` is a ssimulacra2 tolerance and does not apply. The HTML report compares codecs at equal quality, so `--html` is not available in budget mode.
 
 ## Interactive HTML report
 
@@ -373,6 +407,8 @@ For each codec the tool binary-searches the knob: encode, decode back to PNG, st
 the PNG to its critical chunks (so every codec's output is readable by ssimulacra2),
 measure, and adjust. If the target is outside a codec's reachable range, it settles at
 the closest bound (visible as `iters` hitting the max with the knob pinned).
+
+In [budget mode](#budget-mode) the same knob is searched against the encoded size instead, which grows with quality in the same direction as the score: encode, read the size, and adjust towards the largest file under the budget.
 
 ## Scope and assumptions
 

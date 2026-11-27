@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { CODECS } from "../src/codecs.js";
-import { findQualityForTarget } from "../src/pipeline.js";
+import { findQualityForTarget, findQualityForBudget } from "../src/pipeline.js";
 import { sweepCodec } from "../src/sweep.js";
 import { writeStrippedPng, pngDimensions } from "../src/image.js";
 import { resolveCommand } from "../src/exec.js";
@@ -104,6 +104,42 @@ test("searches WebP quality to a real perceptual target", { skip: webpReady ? fa
     assert.match(r.label, /-q \d+/);
   });
 });
+
+for (const id of ["jxl", "webp"]) {
+  const codec = CODECS[id];
+  const ready = id === "jxl" ? jxlReady : webpReady;
+
+  test(`finds the best ${codec.name} quality that fits a byte budget`, { skip: ready ? false : "codecs not on PATH" }, () => {
+    withWorkdir((dir) => {
+      const ref = join(dir, "ref.png");
+      makeTestPng(ref, 128, 96);
+      // A budget halfway between a low and a high quality encode of this image. The
+      // low one fits, so the search must find a file at least as large and as good.
+      const low = findQualityForTarget(codec, ref, 40, dir, { maxIterations: 6 });
+      const high = findQualityForTarget(codec, ref, 90, dir, { maxIterations: 6 });
+      const budget = Math.round((low.bytes + high.bytes) / 2);
+
+      const r = findQualityForBudget(codec, ref, budget, dir, { maxIterations: 10 });
+      assert.equal(r.fits, true);
+      assert.equal(r.budgetBytes, budget);
+      assert.ok(r.bytes <= budget, `${r.bytes} B fits ${budget} B`);
+      assert.ok(r.bytes >= low.bytes, `no smaller than a known fit (${low.bytes} B), got ${r.bytes} B`);
+      assert.ok(r.ssimulacra2 >= low.ssimulacra2 - 0.5, `no worse than a known fit (${low.ssimulacra2}), got ${r.ssimulacra2}`);
+      assert.equal(readFileSync(join(dir, `${id}.${codec.ext}`)).length, r.bytes, "reports the size of the file it wrote");
+      assert.ok(Number.isFinite(r.dssim) && r.bpp > 0);
+    });
+  });
+
+  test(`reports a ${codec.name} budget it cannot meet instead of a file over it`, { skip: ready ? false : "codecs not on PATH" }, () => {
+    withWorkdir((dir) => {
+      const ref = join(dir, "ref.png");
+      makeTestPng(ref, 128, 96);
+      const r = findQualityForBudget(codec, ref, 20, dir, { maxIterations: 6 });
+      assert.equal(r.fits, false);
+      assert.ok(r.bytes > 20 && Number.isFinite(r.ssimulacra2));
+    });
+  });
+}
 
 test("sweepCodec builds a rate-distortion curve sorted by quality", { skip: jxlReady ? false : "codecs not on PATH" }, () => {
   withWorkdir((dir) => {
@@ -358,4 +394,46 @@ test("AVIF SVT-AV1 encodes 4:2:0 with libavif's SVT-AV1 encoder", { skip: svtRea
     assert.ok(r.bytes > 0 && r.bpp > 0);
     assert.equal(r.name, "AVIF SVT-AV1");
   });
+});
+
+test("budget mode compares every codec at the largest file that fits", { skip: jxlReady && webpReady ? false : "codecs not on PATH" }, () => {
+  withWorkdir((dir) => {
+    const images = join(dir, "images");
+    mkdirSync(images);
+    makeTestPng(join(images, "a.png"), 128, 96);
+    makeTestPng(join(images, "b.png"), 96, 128);
+    const csvPath = join(dir, "budget.csv");
+
+    const res = spawnSync(process.execPath, [CLI, images, "--target-bytes", "2KiB", "--codecs", "jxl,webp", "--csv", csvPath], { encoding: "utf8" });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /Budget: 2 KiB = 2,048 bytes/, "states the budget in each table");
+    assert.match(res.stdout, /of budget/);
+    assert.match(res.stdout, /Budget summary — 2 images/, "prints the batch summary");
+    assert.doesNotMatch(res.stdout, /Target: ssimulacra2/, "replaces the equal-quality table");
+
+    const [header, ...lines] = readFileSync(csvPath, "utf8").trim().split("\n");
+    const col = (name) => header.split(",").indexOf(name);
+    assert.equal(lines.length, 4, "one CSV row per image and codec");
+    for (const line of lines) {
+      const cells = line.split(",");
+      assert.equal(cells[col("budget_bytes")], "2048");
+      if (cells[col("fits")] === "true") assert.ok(Number(cells[col("bytes")]) <= 2048, line);
+    }
+  });
+});
+
+const runCli = (args) => spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8" });
+
+test("budget mode rejects options that belong to another mode, and invalid sizes", () => {
+  const cases = [
+    [["x.png", "--target-bytes", "50KB", "--target", "85"], /--target-bytes and --target/],
+    [["x.png", "--target-bytes", "50KB", "--rd", "80,90"], /--target-bytes and --rd/],
+    [["x.png", "--target-bytes", "50KB", "--html", "out.html"], /--html .*--target-bytes/],
+    [["x.png", "--target-bytes", "50 kbit"], /--target-bytes must be a size/],
+  ];
+  for (const [args, message] of cases) {
+    const res = runCli(args);
+    assert.equal(res.status, 1, args.join(" "));
+    assert.match(res.stderr, message, args.join(" "));
+  }
 });

@@ -79,3 +79,60 @@ export function aggregate(perImage, { baselineId } = {}) {
     }))
     .sort((a, b) => (a.avgBpp ?? Infinity) - (b.avgBpp ?? Infinity));
 }
+
+/**
+ * Aggregate per-image budget results (equal size) into a per-codec summary.
+ *
+ * The average ssimulacra2 and the mean difference from a baseline codec cover only
+ * the images where every codec fit the budget, the same images for all, so codecs
+ * are ranked on like for like: averaging each codec over its own images would
+ * reward one for failing to fit the hardest ones. Wins (best quality among the
+ * codecs that fit an image) and the fit count cover every image. Sorted by average
+ * ssimulacra2 (best first).
+ *
+ * @param {Array<{ image: string, results: Array<object> }>} perImage
+ * @param {{ baselineId?: string }} [opts]
+ * @returns {Array<{ id, name, avgScore, deltaVsBaseline, wins, fits, count, compared }>}
+ *   `compared` is the number of images the averages cover.
+ */
+export function aggregateBudget(perImage, { baselineId } = {}) {
+  const byId = new Map();
+  const fitsImage = (r) => !r.failed && r.fits;
+  let compared = 0;
+
+  for (const { results } of perImage) {
+    const fitting = results.filter(fitsImage);
+    const winner = fitting.reduce((best, r) => (!best || r.ssimulacra2 > best.ssimulacra2 ? r : best), null);
+    const everyCodecFits = fitting.length === results.length;
+    const baseline = baselineId ? fitting.find((r) => r.id === baselineId) : null;
+    if (everyCodecFits) compared += 1;
+
+    for (const r of results) {
+      let entry = byId.get(r.id);
+      if (!entry) {
+        entry = { id: r.id, name: r.name, scores: [], deltas: [], wins: 0, fits: 0, count: 0 };
+        byId.set(r.id, entry);
+      }
+      entry.count += 1;
+      if (!fitsImage(r)) continue;
+      entry.fits += 1;
+      if (r === winner) entry.wins += 1;
+      if (!everyCodecFits) continue;
+      entry.scores.push(r.ssimulacra2);
+      if (baseline) entry.deltas.push(r.ssimulacra2 - baseline.ssimulacra2);
+    }
+  }
+
+  return [...byId.values()]
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      avgScore: e.scores.length ? mean(e.scores) : null,
+      deltaVsBaseline: e.deltas.length ? mean(e.deltas) : null,
+      wins: e.wins,
+      fits: e.fits,
+      count: e.count,
+      compared,
+    }))
+    .sort((a, b) => (b.avgScore ?? -Infinity) - (a.avgScore ?? -Infinity));
+}

@@ -75,6 +75,10 @@ compare-codecs <image-or-dir...> [options]
       --max-iterations <n>  Max search steps per codec (default: 10)
       --effort <0..10>      Matched encoder effort across codecs (jxl/avif/webp); higher = slower
       --time-runs <n>       Time each codec's encode n times, report the median (default: 1)
+      --target-bytes <size> Budget mode: search every codec for the largest file that
+                            fits this size (50KB = 50,000 bytes, 50KiB = 51,200, or a
+                            bare byte count) and compare the ssimulacra2 each reaches.
+                            Replaces --target; not available with --rd or --html
       --rd <list>           Rate-distortion mode: search every codec at each target in the
                             list, report bpp per target and BD-rate vs mozjpeg; with
                             --html, the report plots these curves
@@ -95,6 +99,9 @@ compare-codecs images/ --target 90 --csv results.csv
 
 # Interactive report: wipe, format toggle, difference view, rate–distortion chart, quality slider
 compare-codecs images/ --target 90 --html report.html
+
+# Budget: the best quality each codec reaches within 30 KB (equal size, compare quality)
+compare-codecs images/ --target-bytes 30KB --csv budget.csv
 
 # Rate-distortion: bpp at several quality targets and BD-rate vs mozjpeg
 compare-codecs images/ --rd 70,80,85,90,95 --csv rd.csv
