@@ -101,3 +101,10 @@ test("RD points keep their target so the page reads the measured encode there", 
   const data = JSON.parse(buildHtml(rd).match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1]);
   assert.deepEqual(data.images[0].codecs[0].points.map((p) => p.t), [70, 90]);
 });
+
+test("the report labels sizes and memory in KiB and MiB, the units it divides by", () => {
+  const html = buildHtml(report);
+  assert.match(html, /\(b\/1024\)\.toFixed\(1\) \+ ' KiB'/);
+  assert.match(html, /\(b\/1048576\)\.toFixed\(1\)\+' MiB'/);
+  assert.doesNotMatch(html, /' KB'|' MB'/, "no decimal unit on a binary figure");
+});

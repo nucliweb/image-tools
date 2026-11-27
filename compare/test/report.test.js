@@ -58,15 +58,22 @@ test("comparison table shows total encode effort across all iterations", () => {
 test("comparison table shows the encoder's peak memory", () => {
   const table = toComparisonTable(results, meta);
   assert.match(table, /memory/, "expected a memory column");
-  assert.match(table, /48\.0 MB/, "AVIF peak memory in MB");
-  assert.match(table, /100\.0 MB/, "JPEG XL peak memory in MB");
+  assert.match(table, /48\.0 MiB/, "AVIF peak memory in MiB (1024 × 1024 bytes)");
+  assert.match(table, /100\.0 MiB/, "JPEG XL peak memory in MiB");
+});
+
+test("comparison table labels sizes in KiB, the unit it divides by", () => {
+  const table = toComparisonTable(results, meta);
+  assert.match(table, /40\.8 KiB/, "41,822 bytes / 1024");
+  assert.match(table, /54\.7 KiB/, "55,966 bytes / 1024");
+  assert.doesNotMatch(table, /\d KB\b|\d MB\b/, "no decimal unit on a binary figure");
 });
 
 test("comparison table shows n/a when timing is unavailable", () => {
   const untimed = [{ ...results[1], encodeWallMs: null, encodeCpuMs: null, encodePeakBytes: null }];
   const table = toComparisonTable(untimed, meta);
   assert.match(table, /n\/a/);
-  assert.doesNotMatch(table, /MB/, "no memory figure when it was not measured");
+  assert.doesNotMatch(table, /MiB/, "no memory figure when it was not measured");
 });
 
 test("csv has a header row and one row per result, sorted by size", () => {
