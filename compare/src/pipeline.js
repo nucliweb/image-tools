@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { run, runTimed, resolveCommand } from "./exec.js";
 import { buildEncodeArgs } from "./codecs.js";
 import { ssimulacra2, dssim } from "./metrics.js";
-import { searchForTarget } from "./search.js";
+import { searchForTarget, searchForBudget } from "./search.js";
 import { pngDimensions, writeStrippedPng } from "./image.js";
 
 /**
@@ -19,6 +19,23 @@ export function encoderInput(codec, referencePng) {
 }
 
 /**
+ * Encode the reference at a given knob and read the encoded size, timing the
+ * encoder (wall and CPU) and its peak memory.
+ * @returns {{ encoded, bytes, encodeWallMs, encodeCpuMs, encodePeakBytes }}
+ */
+function encodeAt(codec, referencePng, knob, workdir, tag, effort) {
+  const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
+  const timing = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, encoderInput(codec, referencePng), encoded, knob, effort));
+  return {
+    encoded,
+    bytes: statSync(encoded).size,
+    encodeWallMs: timing.wallMs,
+    encodeCpuMs: timing.cpuMs,
+    encodePeakBytes: timing.peakBytes,
+  };
+}
+
+/**
  * Encode the reference at a given knob, decode back to PNG, strip the decoded
  * PNG to critical chunks (so ssimulacra2 can read every codec's output), and
  * measure it. The reference is expected to be already normalized.
@@ -28,22 +45,14 @@ export function encoderInput(codec, referencePng) {
  * @returns {{ score, bytes, decodedPng, encodeWallMs, encodeCpuMs, encodePeakBytes }}
  */
 export function encodeDecodeMeasure(codec, referencePng, knob, workdir, tag = "", effort = null) {
-  const encoded = join(workdir, `${codec.id}${tag}.${codec.ext}`);
   const decodedRaw = join(workdir, `${codec.id}${tag}.dec.raw.png`);
   const decodedPng = join(workdir, `${codec.id}${tag}.dec.png`);
 
-  const timing = runTimed(resolveCommand(codec.encoder), buildEncodeArgs(codec, encoderInput(codec, referencePng), encoded, knob, effort));
+  const { encoded, ...encode } = encodeAt(codec, referencePng, knob, workdir, tag, effort);
   run(resolveCommand(codec.decoder), codec.decodeArgs(encoded, decodedRaw));
   writeStrippedPng(decodedRaw, decodedPng);
 
-  return {
-    score: ssimulacra2(referencePng, decodedPng),
-    bytes: statSync(encoded).size,
-    decodedPng,
-    encodeWallMs: timing.wallMs,
-    encodeCpuMs: timing.cpuMs,
-    encodePeakBytes: timing.peakBytes,
-  };
+  return { score: ssimulacra2(referencePng, decodedPng), decodedPng, ...encode };
 }
 
 /**
@@ -80,6 +89,74 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, eff
 }
 
 /**
+ * Normalize the reference once, unless the caller already did: strip ancillary
+ * chunks so ssimulacra2/dssim can read it, and so every codec is measured against
+ * the exact same input.
+ */
+function normalizedReference(referencePng, workdir, opts) {
+  if (opts.referenceNorm) return opts.referenceNorm;
+  const refNorm = join(workdir, "reference.norm.png");
+  writeStrippedPng(referencePng, refNorm);
+  return refNorm;
+}
+
+/**
+ * Accumulate the encoder's own time across every encode a search performs, plus
+ * the final one, for a per-codec "total encode effort". If any sample is missing
+ * (no /usr/bin/time) the total is reported as null rather than an undercount.
+ */
+function encodeEffort() {
+  let wallMs = 0;
+  let cpuMs = 0;
+  let complete = true;
+  return {
+    add(m) {
+      if (m.encodeWallMs === null || m.encodeCpuMs === null) complete = false;
+      else {
+        wallMs += m.encodeWallMs;
+        cpuMs += m.encodeCpuMs;
+      }
+    },
+    totals: () => ({ totalEncodeWallMs: complete ? wallMs : null, totalEncodeCpuMs: complete ? cpuMs : null }),
+  };
+}
+
+/**
+ * Re-encode at the chosen knob to read the definitive size and decoded output,
+ * time it, and assemble the fields both searches report.
+ *
+ * Timing reuses the final encode's sample for the default single run (no extra
+ * work); for more runs, it re-times the encode and reports the median to cut noise.
+ */
+function measureOperatingPoint(codec, refNorm, knob, workdir, effort, iterations, effortLog, opts) {
+  const final = encodeDecodeMeasure(codec, refNorm, knob, workdir, "", effort);
+  effortLog.add(final);
+
+  const timeRuns = Math.max(1, Math.floor(opts.timeRuns ?? 1));
+  const timing =
+    timeRuns > 1
+      ? medianEncodeTiming(codec, refNorm, knob, workdir, timeRuns, effort)
+      : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs, peakBytes: final.encodePeakBytes };
+
+  return {
+    id: codec.id,
+    name: codec.name,
+    label: codec.label(knob),
+    knob,
+    ssimulacra2: final.score,
+    dssim: dssim(refNorm, final.decodedPng),
+    bytes: final.bytes,
+    bpp: (final.bytes * 8) / pngDimensions(refNorm).pixels,
+    iterations,
+    decodedPng: final.decodedPng,
+    encodeWallMs: timing.wallMs,
+    encodeCpuMs: timing.cpuMs,
+    encodePeakBytes: timing.peakBytes,
+    ...effortLog.totals(),
+  };
+}
+
+/**
  * Search a codec's quality knob until the decoded image reaches the target
  * ssimulacra2 score, then report size and metrics at that operating point.
  *
@@ -87,70 +164,58 @@ export function medianEncodeTiming(codec, referencePng, knob, workdir, runs, eff
  *   decodedPng, encodeWallMs, encodeCpuMs, encodePeakBytes, totalEncodeWallMs, totalEncodeCpuMs }}
  */
 export function findQualityForTarget(codec, referencePng, target, workdir, opts = {}) {
-  // Normalize the reference once: strip ancillary chunks so ssimulacra2/dssim can
-  // read it, and so every codec is measured against the exact same input.
-  const refNorm = opts.referenceNorm ?? join(workdir, "reference.norm.png");
-  if (!opts.referenceNorm) writeStrippedPng(referencePng, refNorm);
-  const { pixels } = pngDimensions(refNorm);
+  const refNorm = normalizedReference(referencePng, workdir, opts);
   const effort = opts.effort ?? null;
-
-  // Accumulate the encoder's own time across every encode the search performs, plus
-  // the final one, for a per-codec "total encode effort". If any sample is missing
-  // (no /usr/bin/time) the total is reported as null rather than an undercount.
-  let totalWallMs = 0;
-  let totalCpuMs = 0;
-  let timingComplete = true;
-  const addEncode = (m) => {
-    if (m.encodeWallMs === null || m.encodeCpuMs === null) timingComplete = false;
-    else {
-      totalWallMs += m.encodeWallMs;
-      totalCpuMs += m.encodeCpuMs;
-    }
-  };
+  const tolerance = opts.tolerance ?? 0.5;
+  const effortLog = encodeEffort();
 
   const search = searchForTarget({
     lo: codec.knob.lo,
     hi: codec.knob.hi,
     target,
-    tolerance: opts.tolerance ?? 0.5,
+    tolerance,
     maxIterations: opts.maxIterations ?? 10,
     increasing: codec.knob.increasing,
     evaluate: (knob) => {
       const m = encodeDecodeMeasure(codec, refNorm, knob, workdir, "", effort);
-      addEncode(m);
+      effortLog.add(m);
       return m.score;
     },
   });
 
-  // Re-encode at the chosen knob to read the definitive size and decoded output.
-  const final = encodeDecodeMeasure(codec, refNorm, search.value, workdir, "", effort);
-  addEncode(final);
-  const tolerance = opts.tolerance ?? 0.5;
+  const op = measureOperatingPoint(codec, refNorm, search.value, workdir, effort, search.iterations, effortLog, opts);
+  return { ...op, reached: Math.abs(op.ssimulacra2 - target) <= tolerance };
+}
 
-  // Timing: reuse the final encode's sample for the default single run (no extra
-  // work); for more runs, re-time the encode and report the median to cut noise.
-  const timeRuns = Math.max(1, Math.floor(opts.timeRuns ?? 1));
-  const timing =
-    timeRuns > 1
-      ? medianEncodeTiming(codec, refNorm, search.value, workdir, timeRuns, effort)
-      : { wallMs: final.encodeWallMs, cpuMs: final.encodeCpuMs, peakBytes: final.encodePeakBytes };
+/**
+ * Search a codec's quality knob for the largest file that fits a byte budget,
+ * then report the quality it reaches there: the inverse of findQualityForTarget,
+ * comparing codecs at equal size instead of equal quality.
+ *
+ * The search only needs the encoded size, so it encodes without decoding or
+ * measuring; the decode and the metrics run once, at the chosen setting.
+ *
+ * @returns {{ ...findQualityForTarget's fields except reached, budgetBytes: number,
+ *   fits: boolean }} `fits` is false when even the lowest quality is over budget.
+ */
+export function findQualityForBudget(codec, referencePng, budgetBytes, workdir, opts = {}) {
+  const refNorm = normalizedReference(referencePng, workdir, opts);
+  const effort = opts.effort ?? null;
+  const effortLog = encodeEffort();
 
-  return {
-    id: codec.id,
-    name: codec.name,
-    label: codec.label(search.value),
-    knob: search.value,
-    ssimulacra2: final.score,
-    dssim: dssim(refNorm, final.decodedPng),
-    bytes: final.bytes,
-    bpp: (final.bytes * 8) / pixels,
-    iterations: search.iterations,
-    reached: Math.abs(final.score - target) <= tolerance,
-    decodedPng: final.decodedPng,
-    encodeWallMs: timing.wallMs,
-    encodeCpuMs: timing.cpuMs,
-    encodePeakBytes: timing.peakBytes,
-    totalEncodeWallMs: timingComplete ? totalWallMs : null,
-    totalEncodeCpuMs: timingComplete ? totalCpuMs : null,
-  };
+  const search = searchForBudget({
+    lo: codec.knob.lo,
+    hi: codec.knob.hi,
+    budget: budgetBytes,
+    maxIterations: opts.maxIterations ?? 10,
+    increasing: codec.knob.increasing,
+    evaluate: (knob) => {
+      const m = encodeAt(codec, refNorm, knob, workdir, "", effort);
+      effortLog.add(m);
+      return m.bytes;
+    },
+  });
+
+  const op = measureOperatingPoint(codec, refNorm, search.value, workdir, effort, search.iterations, effortLog, opts);
+  return { ...op, budgetBytes, fits: op.bytes <= budgetBytes };
 }
